@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enrollment | CDT-MFA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+  <div class="dashboard-grid">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>CDT-MFA <span style="font-weight:400; color:var(--text-muted); font-size:0.8em;">SOC</span></span>
+      </div>
+
+      <nav>
+        <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 1rem;">Monitoring</span>
+        <a href="/dashboard" class="nav-link">
+          <i class="fa-solid fa-chart-line"></i> Dashboard
+        </a>
+        <a href="/soc" class="nav-link">
+          <i class="fa-solid fa-network-wired"></i> Live Analysts
+        </a>
+
+        <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 2rem;">Configuration</span>
+        <a href="javascript:void(0)" onclick="alert('Enrollment module is under development.')" class="nav-link active">
+          <i class="fa-solid fa-fingerprint"></i> Enrollment
+        </a>
+        <a href="javascript:void(0)" onclick="alert('Settings module is under development.')" class="nav-link">
+          <i class="fa-solid fa-sliders"></i> Settings
+        </a>
+      </nav>
+
+      <div style="margin-top: auto;">
+        <div class="panel" style="padding: 1rem; margin-bottom: 1rem; background: #0f172a;">
+          <div class="label-sm">Active User</div>
+          <div style="font-weight: 600; color: #fff;">{{ user }}</div>
+        </div>
+        <a href="/logout" class="btn btn-outline" style="width: 100%; border-color: var(--border-color);">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" style="align-items: center; justify-content: center; min-height: 100vh;">
+
+      <div class="panel" style="width: 100%; max-width: 600px; padding: 2.5rem;">
+        <div style="text-align: center; margin-bottom: 2.5rem;">
+          <div
+            style="width: 64px; height: 64px; background: rgba(16, 185, 129, 0.1); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: var(--success-color);">
+            <i class="fa-solid fa-fingerprint" style="font-size: 2rem;"></i>
+          </div>
+          <h2 style="margin-bottom: 0.5rem;">Behavioral Enrollment</h2>
+          <p style="color: var(--text-muted);">Configure the learning parameters for your digital twin.</p>
+        </div>
+
+        {% if done %}
+        <div
+          style="text-align: center; padding: 2rem; background: rgba(16, 185, 129, 0.05); border: 1px solid var(--success-color); border-radius: 8px;">
+          <i class="fa-solid fa-circle-check"
+            style="font-size: 3rem; color: var(--success-color); margin-bottom: 1rem;"></i>
+          <h3 style="color: var(--success-color);">Enrollment Complete</h3>
+          <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Successfully captured <strong>{{ count }}</strong>
+            behavioral samples.</p>
+          <a href="/dashboard" class="btn btn-primary">Go to Dashboard</a>
+        </div>
+        {% else %}
+
+        <form method="POST" action="/enroll" id="enrollForm">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <div>
+              <label class="label-sm" style="margin-bottom: 0.5rem;">Duration</label>
+              <select name="seconds" style="width: 100%;">
+                <option value="30">30 Seconds (Fast)</option>
+                <option value="60" selected>60 Seconds (Standard)</option>
+                <option value="120">120 Seconds (Deep)</option>
+              </select>
+            </div>
+            <div>
+              <label class="label-sm" style="margin-bottom: 0.5rem;">Precision</label>
+              <select name="interval" style="width: 100%;">
+                <option value="1">High (1s)</option>
+                <option value="2" selected>Normal (2s)</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="progressSection" style="display: none; text-align: center; margin-bottom: 2rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+              <span style="font-weight: 500; color: var(--warning-color);">Learning Pattern...</span>
+              <span id="timerText" style="color: var(--text-muted);">0%</span>
+            </div>
+            <div style="width: 100%; height: 8px; background: #0f172a; border-radius: 4px; overflow: hidden;">
+              <div id="progressBar"
+                style="width: 0%; height: 100%; background: var(--secondary-color); transition: width 1s linear;"></div>
+            </div>
+            <p
+              style="font-size: 0.85rem; color: var(--text-muted); margin-top: 1rem; background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 4px;">
+              <i class="fa-solid fa-keyboard" style="margin-right: 0.5rem;"></i> Please type and move your mouse
+              naturally.
+            </p>
+          </div>
+
+          <div class="actions" style="display: flex; gap: 1rem; margin-top: 2rem;">
+            <a href="/dashboard" class="btn btn-outline" style="flex: 1; justify-content: center;">Cancel</a>
+            <button type="submit" class="btn btn-primary" id="startBtn" style="flex: 2; justify-content: center;">
+              Start Enrollment
+            </button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const form = document.getElementById('enrollForm');
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        const btn = document.getElementById('startBtn');
+        const progressSection = document.getElementById('progressSection');
+        const progressBar = document.getElementById('progressBar');
+        const timerText = document.getElementById('timerText');
+        const seconds = document.querySelector('[name="seconds"]').value;
+
+        // Show progress UI
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+        btn.disabled = true;
+        progressSection.style.display = 'block';
+
+        // Animate progress bar (approximate visual feedback)
+        let width = 0;
+        const interval = setInterval(() => {
+          width += 100 / seconds;
+          if (width >= 100) width = 100;
+          progressBar.style.width = width + '%';
+          timerText.innerText = Math.round(width) + '%';
+        }, 1000);
+      });
+    }
+  </script>
+
+</body>
+
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Access | CDT-MFA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+  <div class="auth-wrapper">
+    <div class="auth-box">
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <div
+          style="width: 48px; height: 48px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: var(--primary-color);">
+          <i class="fa-solid fa-shield-halved" style="font-size: 1.5rem;"></i>
+        </div>
+        <h2 style="margin-bottom: 0.5rem; color: #fff;">System Access</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Enter your credentials to access the secure console.</p>
+      </div>
+
+      {% if error %}
+      <div
+        style="background: rgba(239, 68, 68, 0.1); color: var(--danger-color); padding: 0.75rem; border-radius: 6px; font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center; border: 1px solid rgba(239, 68, 68, 0.2);">
+        <i class="fa-solid fa-circle-exclamation" style="margin-right: 0.5rem;"></i> {{ error }}
+      </div>
+      {% endif %}
+
+      <form method="POST" action="/login">
+        <div style="margin-bottom: 1.25rem;">
+          <label for="username" class="label-sm" style="margin-bottom: 0.5rem;">Identity</label>
+          <div style="position: relative;">
+            <i class="fa-solid fa-user"
+              style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+            <input type="text" id="username" name="username" placeholder="Username" required autofocus
+              style="width: 100%; padding-left: 2.5rem; background: #0f172a;">
+          </div>
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+          <label for="password" class="label-sm" style="margin-bottom: 0.5rem;">Credentials</label>
+          <div style="position: relative;">
+            <i class="fa-solid fa-lock"
+              style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+            <input type="password" id="password" name="password" placeholder="Password" required
+              style="width: 100%; padding-left: 2.5rem; background: #0f172a;">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem;">
+          Authenticate System
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: 2rem;">
+        <a href="/" style="font-size: 0.85rem; color: var(--text-muted); text-decoration: none;">&larr; Return to
+          Portal</a>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+</html>

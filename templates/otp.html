@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Identity | CDT-MFA</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body class="auth-container">
+
+  <div class="auth-card animate-fade-in" style="border-color: var(--warning-color);">
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <i class="fa-solid fa-shield-halved" style="font-size: 3rem; color: var(--warning-color);"></i>
+      <h2 class="auth-title" style="margin-top: 1rem; color: var(--warning-color);">Security Verification</h2>
+      <p style="color: var(--text-muted);">
+        Unusual activity detected. Please verify your identity given the One-Time Password sent to your device.
+      </p>
+    </div>
+
+    {% if error %}
+    <div class="badge badge-high" style="display: block; text-align: center; margin-bottom: 1.5rem; padding: 0.8rem;">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Demo Purpose: Show OTP -->
+    {% if otp_demo %}
+    <div class="glass-panel" style="text-align: center; margin-bottom: 2rem; border-style: dashed;">
+      <p style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Demo OTP
+        Code</p>
+      <div style="font-size: 2rem; font-weight: 700; letter-spacing: 0.2em; color: #fff;">
+        {{ otp_demo }}
+      </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/otp">
+      <div class="form-group">
+        <label for="otp">Enter 6-Digit Code</label>
+        <input type="text" id="otp" name="otp" placeholder="000 000"
+          style="text-align: center; font-size: 1.5rem; letter-spacing: 0.2rem;" maxlength="6" required autofocus>
+      </div>
+
+      <button type="submit" class="btn"
+        style="width: 100%; margin-top: 1rem; background: var(--warning-color); color: #000;">
+        Verify Session
+      </button>
+    </form>
+  </div>
+
+</body>
+
+</html>
