@@ -34,7 +34,7 @@
         </a>
 
         <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 2rem;">Configuration</span>
-        <a href="javascript:void(0)" onclick="alert('Enrollment module is under development.')" class="nav-link">
+        <a href="/enroll" class="nav-link">
           <i class="fa-solid fa-fingerprint"></i> Enrollment
         </a>
         <a href="javascript:void(0)" onclick="alert('Settings module is under development.')" class="nav-link">
@@ -43,9 +43,9 @@
       </nav>
 
       <div style="margin-top: auto;">
-        <div class="panel" style="padding: 1rem; margin-bottom: 1rem; background: #0f172a;">
+        <div class="panel" style="padding: 1rem; margin-bottom: 1.5rem;">
           <div class="label-sm">Active User</div>
-          <div style="font-weight: 600; color: #fff;">{{ user }}</div>
+          <div style="font-weight: 600;">{{ user }}</div>
           <div style="font-size: 0.8rem; color: var(--success-color); display: flex; align-items: center; gap: 0.5rem;">
             <span style="width: 8px; height: 8px; background: var(--success-color); border-radius: 50%;"></span>
             Connected
@@ -83,6 +83,11 @@
           </div>
 
           <div style="height: 24px; width: 1px; background: var(--border-color);"></div>
+
+          <button id="resetSecurityBtn" class="btn btn-outline" onclick="resetSecurity()"
+            style="color: var(--warning-color); border-color: var(--warning-color);">
+            <i class="fa-solid fa-rotate-left"></i> Reset
+          </button>
 
           <button id="monitorBtn" class="btn btn-primary" onclick="toggleMonitor()">
             <i class="fa-solid fa-play"></i> Start Monitor
@@ -137,7 +142,7 @@
             style="font-size: 1.5rem; color: var(--danger-color);"></i>
           <div>
             <h4 id="alertTitle" style="color: var(--danger-color); margin: 0;">Alert</h4>
-            <p id="alertMsg" style="margin: 0; font-size: 0.9rem; color: #fff;">Description</p>
+            <p id="alertMsg" style="margin: 0; font-size: 0.9rem; color: var(--text-main);">Description</p>
           </div>
         </div>
         <a id="alertBtn" href="#" class="btn btn-danger">Action</a>
@@ -191,12 +196,12 @@
             <div
               style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
               <span style="color: var(--text-muted);">FAR (False Accept)</span>
-              <span class="mono" style="color: #fff;" id="metricFAR">0.0000</span>
+              <span class="mono" style="color: var(--text-main);" id="metricFAR">0.0000</span>
             </div>
             <div
               style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
               <span style="color: var(--text-muted);">FRR (False Reject)</span>
-              <span class="mono" style="color: #fff;" id="metricFRR">0.0000</span>
+              <span class="mono" style="color: var(--text-main);" id="metricFRR">0.0000</span>
             </div>
             <div style="margin-top: 1rem;">
               <a href="/api/export_report" class="btn btn-outline" style="width: 100%;">

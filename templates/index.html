@@ -1,51 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CDT-MFA | Next Gen Security</title>
+    <title>CDT-MFA | Behavioral Continuous Authentication</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
 
-    <div class="hero-section animate-fade-in">
-        <div class="glass-panel" style="padding: 4rem; text-align: center; max-width: 800px;">
-            <i class="fa-solid fa-shield-halved" style="font-size: 4rem; color: var(--primary-color); margin-bottom: 1.5rem;"></i>
-            <h1 class="hero-title">Zero Trust. <br> Continuous Auth.</h1>
+    <nav class="top-nav">
+        <div class="brand">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>CDT-MFA <span style="font-weight:400; color:var(--text-muted); font-size:0.8em;">Secure</span></span>
+        </div>
+        <div style="display: flex; gap: 2rem; align-items: center;">
+            <a href="/login" class="btn btn-primary">
+                <i class="fa-solid fa-arrow-right-to-bracket"></i> Client Login
+            </a>
+        </div>
+    </nav>
+
+    <div class="hero-section">
+        <div class="glass-panel" style="padding: 5rem; text-align: center; max-width: 1000px; margin: 0 1.5rem;">
+            <div
+                style="display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(59, 130, 246, 0.1); color: var(--primary-color); padding: 0.5rem 1rem; border-radius: 99px; font-size: 0.875rem; font-weight: 600; margin-bottom: 2rem;">
+                <i class="fa-solid fa-shield-check"></i> Enterprise Grade Protection
+            </div>
+
+            <h1 class="hero-title">Zero Trust.<br>Continuous Auth.</h1>
             <p class="hero-subtitle">
-                Advanced behavioral biometrics and digital twin modeling to secure your sessions in real-time.
+                Secure every second of your session with advanced behavioral biometrics and real-time Digital Twin
+                modeling.
             </p>
-            
-            <div class="hero-actions" style="justify-content: center;">
-                <a href="/login" class="btn btn-primary">
-                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Enter System
-                </a>
-                <a href="https://github.com/google-deepmind" target="_blank" class="btn btn-secondary">
-                    <i class="fa-brands fa-github"></i> Learn More
+
+            <div style="display: flex; gap: 1.5rem; justify-content: center; margin-bottom: 5rem;">
+                <a href="/login" class="btn btn-primary" style="padding: 1rem 2.5rem; font-size: 1rem;">
+                    Access Secure Terminal <i class="fa-solid fa-chevron-right" style="font-size: 0.8rem;"></i>
                 </a>
             </div>
 
-            <div class="metrics-grid" style="margin-top: 4rem; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
-                <div style="text-align: center;">
-                    <i class="fa-solid fa-fingerprint" style="font-size: 2rem; color: var(--secondary-color); margin-bottom: 1rem;"></i>
-                    <h4 style="font-size: 1rem;">Behavioral ID</h4>
-                    <p style="font-size: 0.8rem; color: var(--text-muted);">Keystroke & Mouse Dynamics</p>
+            <div class="metrics-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem;">
+                <div class="metric-card">
+                    <i class="fa-solid fa-fingerprint"
+                        style="font-size: 2.5rem; color: var(--accent-color); margin-bottom: 1.5rem;"></i>
+                    <h4 style="margin-bottom: 0.75rem;">Behavioral ID</h4>
+                    <p style="font-size: 0.9rem; color: var(--text-muted);">Dynamic mapping of keystroke rhythm and
+                        mouse movement patterns.</p>
                 </div>
-                <div style="text-align: center;">
-                    <i class="fa-solid fa-brain" style="font-size: 2rem; color: var(--primary-color); margin-bottom: 1rem;"></i>
-                    <h4 style="font-size: 1rem;">AI Powered</h4>
-                    <p style="font-size: 0.8rem; color: var(--text-muted);">Real-time Anomaly Detection</p>
+                <div class="metric-card">
+                    <i class="fa-solid fa-brain"
+                        style="font-size: 2.5rem; color: var(--primary-color); margin-bottom: 1.5rem;"></i>
+                    <h4 style="margin-bottom: 0.75rem;">AI Powered</h4>
+                    <p style="font-size: 0.9rem; color: var(--text-muted);">Real-time anomaly detection engine with
+                        instant threat attribution.</p>
                 </div>
-                <div style="text-align: center;">
-                    <i class="fa-solid fa-lock" style="font-size: 2rem; color: var(--danger-color); margin-bottom: 1rem;"></i>
-                    <h4 style="font-size: 1rem;">Auto-Lock</h4>
-                    <p style="font-size: 0.8rem; color: var(--text-muted);">Instant Threat Mitigation</p>
+                <div class="metric-card">
+                    <i class="fa-solid fa-lock"
+                        style="font-size: 2.5rem; color: var(--danger-color); margin-bottom: 1.5rem;"></i>
+                    <h4 style="margin-bottom: 0.75rem;">Auto-Lock</h4>
+                    <p style="font-size: 0.9rem; color: var(--text-muted);">Immediate mitigation protocols to secure
+                        data upon identity suspicion.</p>
                 </div>
             </div>
         </div>
     </div>
 
+    <footer class="footer">
+        <div>&copy; 2026 CDT-MFA Security Systems. All rights reserved.</div>
+        <div style="display: flex; gap: 2rem; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--success-color);">
+                <span style="width: 8px; height: 8px; background: var(--success-color); border-radius: 50%;"></span>
+                Global System Status: Optimal
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-lock" style="font-size: 0.8rem;"></i> SSL Encrypted
+            </div>
+        </div>
+    </footer>
+
 </body>
+
 </html>

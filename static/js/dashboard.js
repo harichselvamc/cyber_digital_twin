@@ -48,6 +48,31 @@ async function toggleMonitor() {
     }
 }
 
+async function resetSecurity() {
+    const res = await fetch('/api/reset_security', { method: 'POST' });
+    if (res.ok) {
+        const data = await res.json();
+        if (data.reset) {
+            // Restore UI state
+            monitorRunning = false;
+            const btn = document.getElementById('monitorBtn');
+            btn.innerHTML = '<i class="fa-solid fa-play"></i> Start Monitor';
+            btn.classList.remove('btn-danger');
+            btn.classList.add('btn-primary');
+
+            const pulse = document.getElementById('systemPulse');
+            if (pulse) pulse.style.backgroundColor = 'var(--text-muted)';
+
+            // Hide any active alerts
+            document.getElementById('alertArea').style.display = 'none';
+
+            // Re-fetch everything to show fresh state
+            updateRisk();
+            fetchAnalytics();
+        }
+    }
+}
+
 document.getElementById('toggleAttackBtn').addEventListener('click', async () => {
     const btn = document.getElementById('toggleAttackBtn');
     const level = document.getElementById('attackLevel').value;
@@ -157,13 +182,23 @@ async function updateRisk() {
         alertTitle.style.color = 'var(--danger-color)';
         alertMsg.innerText = "High risk activity. System access has been suspended.";
 
-        alertBtn.innerText = "Locked";
-        alertBtn.href = "#";
+        alertBtn.innerText = "Reset Security";
+        alertBtn.onclick = (e) => {
+            e.preventDefault();
+            resetSecurity();
+        };
+        alertBtn.href = "javascript:void(0)";
         alertBtn.className = "btn btn-danger";
         alertBtn.style.backgroundColor = ""; // Clear inline style
         alertBtn.style.color = "";
 
-        if (monitorRunning) toggleMonitorUI(false);
+        if (monitorRunning) {
+            monitorRunning = false;
+            const btn = document.getElementById('monitorBtn');
+            btn.innerHTML = '<i class="fa-solid fa-play"></i> Start Monitor';
+            btn.classList.remove('btn-danger');
+            btn.classList.add('btn-primary');
+        }
 
     } else {
         alertArea.style.display = 'none';
@@ -187,10 +222,10 @@ function initCharts() {
     const ctxExplain = document.getElementById('explainChart').getContext('2d');
     const ctxHeatmap = document.getElementById('heatmapChart').getContext('2d');
 
-    // Theme Colors
-    const colorBorder = '#334155';
-    const colorText = '#94a3b8';
-    const colorPrimary = '#3b82f6';
+    // Theme Colors (Professional Light)
+    const colorBorder = '#e2e8f0';
+    const colorText = '#64748b';
+    const colorPrimary = '#0f172a';
     const colorDanger = '#ef4444';
     const colorSuccess = '#10b981';
 

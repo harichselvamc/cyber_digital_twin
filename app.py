@@ -21,7 +21,6 @@ from fingerprint import fingerprint_similarity
 from report_generator import generate_report
 
 
-
 app = Flask(__name__)
 app.secret_key = "dev-secret-change-me"
 
@@ -29,8 +28,6 @@ USERS = {"admin": "admin123", "user2": "pass123"}
 
 collector = BehaviorCollector(window_seconds=10.0)
 dtm = DigitalTwinModel()
-
-
 
 _monitor_thread: Optional[threading.Thread] = None
 _monitor_running = False
@@ -54,6 +51,35 @@ _latest_risk = {
     "attack_level": 0,
 }
 
+# =====================================================
+#  SECURITY RESET (NEW)
+# =====================================================
+def reset_security_state():
+    global _attack_mode, _attack_level, _attack_start_ts, _latest_risk
+
+    _attack_mode = False
+    _attack_level = 0
+    _attack_start_ts = None
+
+    _latest_risk = {
+        "risk_score": 0,
+        "level": "LOW",
+        "action": "ALLOW",
+        "confidence": 100,
+        "fingerprint_score": 100,
+        "ts": 0,
+        "otp_required": False,
+        "features": {},
+        "attack_mode": False,
+        "attack_level": 0,
+    }
+
+    print(" SECURITY STATE RESET")
+
+
+# =====================================================
+# ROUTES
+# =====================================================
 
 @app.route("/")
 def index():
@@ -69,8 +95,9 @@ def login():
         p = request.form.get("password")
 
         if USERS.get(u) == p:
+            reset_security_state()   
+
             session.clear()
-            session.permanent = True 
             session["user"] = u
             session["otp_verified"] = True
             _current_user = u
@@ -79,8 +106,6 @@ def login():
             if model:
                 dtm.model = model
                 print("Loaded Digital Twin:", u)
-            else:
-                print("No model for", u, "-> Please Enroll first")
 
             return redirect("/dashboard")
 
@@ -93,6 +118,7 @@ def login():
 def logout():
     global _current_user
     stop_monitoring()
+    reset_security_state()  
     session.clear()
     _current_user = "unknown"
     return redirect("/")
@@ -110,7 +136,9 @@ def soc():
     return render_template("soc.html")
 
 
-
+# =====================================================
+# ENROLLMENT
+# =====================================================
 @app.route("/enroll", methods=["GET", "POST"])
 def enroll():
     global _current_user
@@ -126,6 +154,7 @@ def enroll():
         interval = float(request.form.get("interval", "2"))
 
         samples: List[Dict[str, float]] = []
+
         collector.start()
         end = time.time() + seconds
 
@@ -143,7 +172,9 @@ def enroll():
     return render_template("enroll.html", done=False, count=0)
 
 
-
+# =====================================================
+# OTP
+# =====================================================
 def generate_otp():
     return str(secrets.randbelow(900000) + 100000)
 
@@ -177,9 +208,12 @@ def otp():
     return render_template("otp.html", error=error, otp_demo=session.get("otp_code"))
 
 
-
+# =====================================================
+# MONITOR CONTROL
+# =====================================================
 @app.route("/api/start_monitor", methods=["POST"])
 def api_start_monitor():
+    reset_security_state()  
     start_monitoring()
     return jsonify({"ok": True})
 
@@ -190,6 +224,9 @@ def api_stop_monitor():
     return jsonify({"ok": True})
 
 
+# =====================================================
+# ATTACK MODE
+# =====================================================
 @app.route("/api/attack_mode", methods=["POST"])
 def api_attack_mode():
     global _attack_mode, _attack_level, _attack_start_ts
@@ -207,15 +244,31 @@ def api_attack_mode():
     return jsonify({"attack_mode": _attack_mode, "level": _attack_level})
 
 
+# =====================================================
+#  RESET ENDPOINT
+# =====================================================
+@app.route("/api/reset_security", methods=["POST"])
+def api_reset_security():
+    stop_monitoring()
+    reset_security_state()
+    return jsonify({"reset": True})
+
+
+# =====================================================
+# RISK API
+# =====================================================
 @app.route("/api/risk")
 def api_risk():
-    # If blocked, clear web session too
     if _latest_risk["action"] == "BLOCK":
         stop_monitoring()
+        reset_security_state()  
+
     return jsonify(_latest_risk)
 
 
-
+# =====================================================
+# ANALYTICS
+# =====================================================
 @app.route("/api/analytics")
 def api_analytics():
     return jsonify(evaluate_far_frr(session.get("user")))
@@ -262,7 +315,9 @@ def api_heatmap():
     return jsonify(buckets)
 
 
-
+# =====================================================
+# MONITOR LOOP
+# =====================================================
 def monitor_loop():
     global _latest_risk, _monitor_running
 
@@ -271,31 +326,15 @@ def monitor_loop():
 
     while _monitor_running:
 
-        # Select features
         if _attack_mode:
-            features = generate_attacker_features(level=_attack_level, start_ts=_attack_start_ts)
+            features = generate_attacker_features(
+                level=_attack_level,
+                start_ts=_attack_start_ts
+            )
         else:
-            snap = collector.snapshot()
-            features = snap.features
+            features = collector.snapshot().features
 
         res = dtm.evaluate(features)
-
-
-        if _attack_mode and _attack_level == 3 and _attack_start_ts is not None:
-            if (time.time() - _attack_start_ts) > 5:
-                class _R:
-                    pass
-                tmp = _R()
-                tmp.risk_score = 95.0
-                tmp.level = "HIGH"
-                tmp.action = "BLOCK"
-                tmp.anomaly_score = -1.0
-                res = tmp
-
-        print("MONITOR TICK | attack:", _attack_mode,
-              "level:", _attack_level,
-              "risk:", res.risk_score,
-              "action:", res.action)
 
         _latest_risk = {
             "risk_score": res.risk_score,
@@ -316,12 +355,10 @@ def monitor_loop():
         if res.action == "BLOCK":
             now = time.time()
             if now - last_lock > 30:
-                print("LOCKING WINDOWS NOW...")
                 lock_windows()
                 last_lock = now
 
         time.sleep(1)
-
 
 
 def start_monitoring():

@@ -20,7 +20,7 @@
         <span>CDT-MFA <span style="font-weight:400; color:var(--text-muted); font-size:0.8em;">SOC</span></span>
       </div>
 
-      <nav>
+      <nav id="sidebarNav">
         <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 1rem;">Monitoring</span>
         <a href="/dashboard" class="nav-link">
           <i class="fa-solid fa-chart-line"></i> Dashboard
@@ -30,7 +30,7 @@
         </a>
 
         <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 2rem;">Configuration</span>
-        <a href="javascript:void(0)" onclick="alert('Enrollment module is under development.')" class="nav-link active">
+        <a href="/enroll" class="nav-link active">
           <i class="fa-solid fa-fingerprint"></i> Enrollment
         </a>
         <a href="javascript:void(0)" onclick="alert('Settings module is under development.')" class="nav-link">
@@ -39,11 +39,12 @@
       </nav>
 
       <div style="margin-top: auto;">
-        <div class="panel" style="padding: 1rem; margin-bottom: 1rem; background: #0f172a;">
+        <div class="panel" style="padding: 1rem; margin-bottom: 1rem;">
           <div class="label-sm">Active User</div>
-          <div style="font-weight: 600; color: #fff;">{{ user }}</div>
+          <div style="font-weight: 600;">{{ user }}</div>
         </div>
-        <a href="/logout" class="btn btn-outline" style="width: 100%; border-color: var(--border-color);">
+        <a href="/logout" id="logoutBtn" class="btn btn-outline"
+          style="width: 100%; border-color: var(--border-color);">
           <i class="fa-solid fa-right-from-bracket"></i> Logout
         </a>
       </div>
@@ -75,42 +76,57 @@
         {% else %}
 
         <form method="POST" action="/enroll" id="enrollForm">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-            <div>
-              <label class="label-sm" style="margin-bottom: 0.5rem;">Duration</label>
-              <select name="seconds" style="width: 100%;">
-                <option value="30">30 Seconds (Fast)</option>
-                <option value="60" selected>60 Seconds (Standard)</option>
-                <option value="120">120 Seconds (Deep)</option>
-              </select>
-            </div>
-            <div>
-              <label class="label-sm" style="margin-bottom: 0.5rem;">Precision</label>
-              <select name="interval" style="width: 100%;">
-                <option value="1">High (1s)</option>
-                <option value="2" selected>Normal (2s)</option>
-              </select>
+          <div id="formFields">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+              <div>
+                <label class="label-sm" style="margin-bottom: 0.5rem;">Duration</label>
+                <select name="seconds" id="secondsInput" style="width: 100%;">
+                  <option value="30">30 Seconds (Fast)</option>
+                  <option value="60" selected>60 Seconds (Standard)</option>
+                  <option value="120">120 Seconds (Deep)</option>
+                </select>
+              </div>
+              <div>
+                <label class="label-sm" style="margin-bottom: 0.5rem;">Precision</label>
+                <select name="interval" style="width: 100%;">
+                  <option value="1">High (1s)</option>
+                  <option value="2" selected>Normal (2s)</option>
+                </select>
+              </div>
             </div>
           </div>
 
           <div id="progressSection" style="display: none; text-align: center; margin-bottom: 2rem;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-              <span style="font-weight: 500; color: var(--warning-color);">Learning Pattern...</span>
-              <span id="timerText" style="color: var(--text-muted);">0%</span>
+            <div style="margin-bottom: 1.5rem;">
+              <h3 style="color: var(--text-main); margin-bottom: 0.5rem;">Enrollment in progress...</h3>
+              <p style="color: var(--text-muted); font-weight: 500;">
+                Please type and move your mouse normally. Do not stay idle.
+              </p>
             </div>
-            <div style="width: 100%; height: 8px; background: #0f172a; border-radius: 4px; overflow: hidden;">
+
+            <div style="font-size: 3rem; font-weight: 700; color: var(--text-main); margin-bottom: 1rem;"
+              id="countdownDisplay">
+              60s
+            </div>
+
+            <div
+              style="width: 100%; height: 8px; background: var(--bg-color); border-radius: 4px; overflow: hidden; margin-bottom: 1rem;">
               <div id="progressBar"
                 style="width: 0%; height: 100%; background: var(--secondary-color); transition: width 1s linear;"></div>
             </div>
-            <p
-              style="font-size: 0.85rem; color: var(--text-muted); margin-top: 1rem; background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 4px;">
-              <i class="fa-solid fa-keyboard" style="margin-right: 0.5rem;"></i> Please type and move your mouse
-              naturally.
-            </p>
+
+            <div
+              style="display: flex; justify-content: center; align-items: center; gap: 1rem; padding: 1rem; background: rgba(255,158,11,0.1); border: 1px solid var(--warning-color); border-radius: 8px;">
+              <i class="fa-solid fa-triangle-exclamation" style="color: var(--warning-color);"></i>
+              <span style="font-size: 0.85rem; color: var(--text-main);">
+                Warning: Closing this tab or navigating away will cancel enrollment.
+              </span>
+            </div>
           </div>
 
-          <div class="actions" style="display: flex; gap: 1rem; margin-top: 2rem;">
-            <a href="/dashboard" class="btn btn-outline" style="flex: 1; justify-content: center;">Cancel</a>
+          <div class="actions" id="actionButtons" style="display: flex; gap: 1rem; margin-top: 2rem;">
+            <a href="/dashboard" id="cancelBtn" class="btn btn-outline"
+              style="flex: 1; justify-content: center;">Cancel</a>
             <button type="submit" class="btn btn-primary" id="startBtn" style="flex: 2; justify-content: center;">
               Start Enrollment
             </button>
@@ -127,23 +143,54 @@
     if (form) {
       form.addEventListener('submit', function (e) {
         const btn = document.getElementById('startBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
         const progressSection = document.getElementById('progressSection');
         const progressBar = document.getElementById('progressBar');
-        const timerText = document.getElementById('timerText');
-        const seconds = document.querySelector('[name="seconds"]').value;
+        const countdownDisplay = document.getElementById('countdownDisplay');
+        const formFields = document.getElementById('formFields');
+        const actionButtons = document.getElementById('actionButtons');
+        const totalSeconds = parseInt(document.getElementById('secondsInput').value);
+        const navLinks = document.querySelectorAll('.nav-link');
 
-        // Show progress UI
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
-        btn.disabled = true;
+        // Prevent navigation/refresh
+        window.onbeforeunload = function () {
+          return "Enrollment is in progress. Are you sure you want to leave?";
+        };
+
+        // Disable all navigation links
+        navLinks.forEach(link => {
+          link.style.pointerEvents = 'none';
+          link.style.opacity = '0.5';
+        });
+
+        if (logoutBtn) {
+          logoutBtn.style.pointerEvents = 'none';
+          logoutBtn.style.opacity = '0.5';
+        }
+
+        // Show progress UI, hide form fields
+        formFields.style.display = 'none';
+        actionButtons.style.display = 'none';
         progressSection.style.display = 'block';
 
-        // Animate progress bar (approximate visual feedback)
-        let width = 0;
-        const interval = setInterval(() => {
-          width += 100 / seconds;
-          if (width >= 100) width = 100;
-          progressBar.style.width = width + '%';
-          timerText.innerText = Math.round(width) + '%';
+        let remainingSeconds = totalSeconds;
+        countdownDisplay.innerText = remainingSeconds + 's';
+
+        // Animate progress bar and countdown
+        const timer = setInterval(() => {
+          remainingSeconds--;
+          if (remainingSeconds <= 0) {
+            remainingSeconds = 0;
+            clearInterval(timer);
+            // Remove navigation protection just before the form finishes submitting
+            // Note: The form submission is already happening, so this is for the reload
+            window.onbeforeunload = null;
+          }
+
+          const progress = ((totalSeconds - remainingSeconds) / totalSeconds) * 100;
+          progressBar.style.width = progress + '%';
+          countdownDisplay.innerText = remainingSeconds + 's';
         }, 1000);
       });
     }
