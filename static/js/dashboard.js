@@ -9,6 +9,49 @@ let replayChartInstance = null;
 let explainChartInstance = null;
 let heatmapChartInstance = null;
 
+const featureMetadata = {
+    "click_rate": {
+        "meaning": "How often the user clicks the mouse per second.",
+        "explanation": "Measures how fast you click.",
+        "example": "5 clicks/s is normal; 15 clicks/s is unusual."
+    },
+    "hold_mean": {
+        "meaning": "Average time a key is held down before being released.",
+        "explanation": "How long you normally press each key.",
+        "example": "120ms is typical; a drop to 40ms indicates a change."
+    },
+    "hold_std": {
+        "meaning": "Variation in how long keys are held.",
+        "explanation": "How consistent your key pressing duration is.",
+        "example": "100-130ms is consistent; 30-300ms is erratic/suspicious."
+    },
+    "iki_mean": {
+        "meaning": "Average time between pressing one key and the next.",
+        "explanation": "Your average typing speed rhythm.",
+        "example": "200ms is normal rhythm; 80ms is faster than usual."
+    },
+    "iki_std": {
+        "meaning": "Variation in typing rhythm between keys.",
+        "explanation": "How steady your typing rhythm is.",
+        "example": "Steady speed is low variation; random bursts are high variation."
+    },
+    "key_rate": {
+        "meaning": "Number of keys pressed per second.",
+        "explanation": "How fast you type overall.",
+        "example": "4 keys/s is normal; 12 keys/s is an unusual spike."
+    },
+    "mouse_speed_mean": {
+        "meaning": "Average speed of mouse movement.",
+        "explanation": "How fast you normally move your mouse.",
+        "example": "Smooth moderate movement is normal; sudden jumps are anomalies."
+    },
+    "mouse_speed_std": {
+        "meaning": "Variation in mouse movement speed.",
+        "explanation": "How steady or shaky your mouse movements are.",
+        "example": "Smooth movement is low variation; jerky movement is high variation."
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     initCharts();
     fetchAnalytics();
@@ -249,6 +292,19 @@ function initCharts() {
         interaction: {
             mode: 'index',
             intersect: false,
+        },
+        plugins: {
+            tooltip: {
+                backgroundColor: '#ffffff',
+                titleColor: '#0f172a',
+                bodyColor: '#475569',
+                borderColor: '#e2e8f0',
+                borderWidth: 1,
+                padding: 10,
+                cornerRadius: 8,
+                titleFont: { family: 'Inter', weight: 'bold' },
+                bodyFont: { family: 'Inter' }
+            }
         }
     };
 
@@ -295,9 +351,16 @@ function initCharts() {
         options: {
             ...commonOptions,
             indexAxis: 'y',
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false } // Disable default tooltips
+            },
             scales: {
                 x: { grid: { display: false }, ticks: { color: colorText } },
-                y: { grid: { display: false }, ticks: { color: colorText } }
+                y: {
+                    grid: { display: false },
+                    ticks: { display: false } // Hide ticks, we use HTML legend
+                }
             }
         }
     });
@@ -358,6 +421,9 @@ async function updateCharts() {
             explainChartInstance.data.labels = featureLabels;
             explainChartInstance.data.datasets[0].data = featureValues;
             explainChartInstance.update();
+
+            // Render HTML Legend if not already or on update
+            renderFeatureLegend(featureLabels);
         }
 
         // 3. Heatmap
@@ -371,4 +437,70 @@ async function updateCharts() {
     } catch (e) {
         console.error("Chart update error:", e);
     }
+}
+
+// Update charts dynamically when theme changes to ensure contrast
+window.addEventListener('themeUpdated', () => {
+    if (!replayChartInstance || !explainChartInstance || !heatmapChartInstance) return;
+
+    const colorBorder = window.isDarkTheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+    const colorText = window.isDarkTheme ? '#cbd5e1' : '#475569';
+
+    const charts = [replayChartInstance, explainChartInstance, heatmapChartInstance];
+    charts.forEach(chart => {
+        if (chart.options.scales.x) {
+            if (chart.options.scales.x.grid) chart.options.scales.x.grid.color = colorBorder;
+            if (chart.options.scales.x.ticks) chart.options.scales.x.ticks.color = colorText;
+        }
+        if (chart.options.scales.y) {
+            if (chart.options.scales.y.grid) chart.options.scales.y.grid.color = colorBorder;
+            if (chart.options.scales.y.ticks) chart.options.scales.y.ticks.color = colorText;
+        }
+        chart.update();
+    });
+
+    // Explain chart bar colors (we want them visible)
+    explainChartInstance.data.datasets[0].backgroundColor = window.isDarkTheme ? '#94a3b8' : '#0f172a';
+    explainChartInstance.update();
+});
+
+// --- Feature Info UI Logic ---
+
+let currentFeatureLabels = [];
+
+function renderFeatureLegend(labels) {
+    // Only re-render if labels changed or legend is empty
+    const container = document.getElementById('featureLegend');
+    if (!container) return;
+
+    if (JSON.stringify(labels) === JSON.stringify(currentFeatureLabels) && container.children.length > 0) {
+        return;
+    }
+    currentFeatureLabels = labels;
+
+    container.innerHTML = '';
+    labels.forEach(label => {
+        const row = document.createElement('div');
+        row.className = 'feature-info-row';
+
+        row.innerHTML = `
+            <span class="feature-name">${label}</span>
+            <button class="info-btn" onclick="showFeatureInfo('${label}')" title="Click for details">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+        `;
+        container.appendChild(row);
+    });
+}
+
+function showFeatureInfo(feature) {
+    const meta = featureMetadata[feature];
+    if (!meta) return;
+
+    document.getElementById('modalFeatureTitle').innerText = feature;
+    document.getElementById('modalMeaning').innerText = meta.meaning;
+    document.getElementById('modalExplanation').innerText = meta.explanation;
+    document.getElementById('modalExample').innerText = meta.example;
+
+    document.getElementById('featureModal').classList.add('active');
 }

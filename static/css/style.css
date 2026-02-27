@@ -236,18 +236,6 @@ input:focus {
     overflow: hidden;
 }
 
-.stat-card.risk-high {
-    border-left: 4px solid var(--danger-color);
-}
-
-.stat-card.risk-med {
-    border-left: 4px solid var(--warning-color);
-}
-
-.stat-card.risk-low {
-    border-left: 4px solid var(--success-color);
-}
-
 /* Main Chart Area */
 .chart-section {
     display: grid;
@@ -466,4 +454,134 @@ input:focus {
     .hero-title {
         font-size: 3rem;
     }
+}
+
+/* Feature Legend Styles */
+.feature-info-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 30px;
+    /* Match bar thickness/spacing approximately */
+    margin-bottom: 5px;
+}
+
+.feature-name {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
+}
+
+.info-btn {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.info-btn:hover {
+    transform: scale(1.2);
+    color: var(--primary-color);
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+
+.modal-content {
+    background: #ffffff;
+    color: #0f172a;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    padding: 2rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    position: relative;
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.active .modal-content {
+    transform: translateY(0);
+}
+
+.modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.25rem;
+}
+
+.modal-header {
+    margin-bottom: 1.5rem;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    font-family: var(--font-mono);
+}
+
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.modal-section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.modal-text {
+    font-size: 0.95rem;
+    color: #0f172a;
+    line-height: 1.5;
+}
+
+.modal-example {
+    background: transparent;
+    color: #475569;
+    padding: 0.5rem 0;
+    border-top: 1px solid #e2e8f0;
+    font-style: italic;
 }

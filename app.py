@@ -1,7 +1,8 @@
 import time
-import threading
 import secrets
+import threading
 from typing import List, Dict, Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, render_template, request, redirect, session, jsonify, send_file
 
@@ -26,16 +27,21 @@ app.secret_key = "dev-secret-change-me"
 
 USERS = {"admin": "admin123", "user2": "pass123"}
 
+# =====================================================
+# CORE OBJECTS
+# =====================================================
+
 collector = BehaviorCollector(window_seconds=10.0)
 dtm = DigitalTwinModel()
 
-_monitor_thread: Optional[threading.Thread] = None
-_monitor_running = False
+_monitor_executor = ThreadPoolExecutor(max_workers=1)
+_monitor_stop_event = threading.Event()
+_monitor_lock = threading.Lock()
+_monitor_future = None
 
 _attack_mode = False
 _attack_level = 3
 _attack_start_ts: Optional[float] = None
-
 _current_user = "unknown"
 
 _latest_risk = {
@@ -52,30 +58,164 @@ _latest_risk = {
 }
 
 # =====================================================
-#  SECURITY RESET (NEW)
+# RESET
 # =====================================================
+
 def reset_security_state():
     global _attack_mode, _attack_level, _attack_start_ts, _latest_risk
 
-    _attack_mode = False
-    _attack_level = 0
-    _attack_start_ts = None
+    with _monitor_lock:
+        _attack_mode = False
+        _attack_level = 0
+        _attack_start_ts = None
 
-    _latest_risk = {
-        "risk_score": 0,
-        "level": "LOW",
-        "action": "ALLOW",
-        "confidence": 100,
-        "fingerprint_score": 100,
-        "ts": 0,
-        "otp_required": False,
-        "features": {},
-        "attack_mode": False,
-        "attack_level": 0,
-    }
+        _latest_risk = {
+            "risk_score": 0,
+            "level": "LOW",
+            "action": "ALLOW",
+            "confidence": 100,
+            "fingerprint_score": 100,
+            "ts": 0,
+            "otp_required": False,
+            "features": {},
+            "attack_mode": False,
+            "attack_level": 0,
+        }
 
-    print(" SECURITY STATE RESET")
+# =====================================================
+# MONITOR LOOP (REALISTIC + PERSISTENT)
+# =====================================================
 
+def monitor_loop(user):
+    global _latest_risk
+
+    model = storage.load_model(user)
+    if model:
+        dtm.model = model
+
+    collector.start()
+
+    # Lock control
+    last_lock = 0.0
+    LOCK_COOLDOWN_SECONDS = 10.0  # prevent repeated locking spam
+
+    # Persistence control: require consecutive "BLOCK" decisions before locking
+    block_streak = 0
+    REQUIRED_BLOCK_STREAK = 2  # realistic persistence (not time-based)
+
+    while not _monitor_stop_event.is_set():
+
+        start_cycle = time.time()
+
+        try:
+            # -------------------------
+            # FEATURE SOURCE
+            # -------------------------
+            if _attack_mode:
+                features = generate_attacker_features(
+                    level=_attack_level,
+                    start_ts=_attack_start_ts
+                )
+            else:
+                features = collector.snapshot().features
+
+            # -------------------------
+            # OPTIONAL POLICY BOOST
+            # -------------------------
+            policy_boost = 0.0
+            if _attack_mode and _attack_level >= 3:
+                policy_boost = 10.0
+
+            # Model evaluation
+            res = dtm.evaluate(features, policy_boost=policy_boost)
+
+            # -------------------------
+            # Fingerprint -> risk adjustment
+            # -------------------------
+            fp = fingerprint_similarity(features)
+
+            adjusted_risk = float(res.risk_score)
+            if fp < 60:
+                adjusted_risk = min(100.0, adjusted_risk + 10.0)
+            if fp < 40:
+                adjusted_risk = min(100.0, adjusted_risk + 20.0)
+
+            # Update action based on adjusted_risk thresholds
+            action = res.action
+            level = res.level
+            if adjusted_risk >= dtm.high_threshold:
+                action = "BLOCK"
+                level = "HIGH"
+            elif adjusted_risk >= dtm.low_threshold and action != "BLOCK":
+                action = "STEP_UP"
+                level = "MEDIUM"
+
+            # -------------------------
+            # Build risk_data
+            # -------------------------
+            risk_data = {
+                "risk_score": adjusted_risk,
+                "level": level,
+                "action": action,
+                "confidence": confidence_score(res.anomaly_score),
+                "fingerprint_score": fp,
+                "ts": time.time(),
+                "otp_required": (action == "STEP_UP"),
+                "features": features,
+                "attack_mode": _attack_mode,
+                "attack_level": _attack_level,
+            }
+
+            with _monitor_lock:
+                _latest_risk = risk_data
+
+            risk_logger.log_risk(risk_data)
+            soc_monitor.update_user(user, risk_data)
+
+            # -------------------------
+            # REALISTIC ENFORCEMENT: persistence-based lock
+            # -------------------------
+            if action == "BLOCK":
+                block_streak += 1
+            else:
+                block_streak = 0
+
+            if block_streak >= REQUIRED_BLOCK_STREAK:
+                now = time.time()
+                if now - last_lock >= LOCK_COOLDOWN_SECONDS:
+                    print("🚨 BLOCK confirmed (persistent). Locking Windows.")
+                    lock_windows()
+                    last_lock = now
+
+        except Exception as e:
+            print("Monitor error:", e)
+
+        # Adaptive sleep
+        elapsed = time.time() - start_cycle
+        sleep_time = max(0.3, 1.0 - elapsed)
+        time.sleep(sleep_time)
+
+# =====================================================
+# MONITOR CONTROL
+# =====================================================
+
+def start_monitoring():
+    global _monitor_future
+
+    if "user" not in session:
+        return
+
+    if _monitor_future and not _monitor_future.done():
+        return
+
+    _monitor_stop_event.clear()
+    user = session["user"]
+
+    _monitor_future = _monitor_executor.submit(monitor_loop, user)
+
+
+def stop_monitoring():
+    _monitor_stop_event.set()
 
 # =====================================================
 # ROUTES
@@ -95,18 +235,11 @@ def login():
         p = request.form.get("password")
 
         if USERS.get(u) == p:
-            reset_security_state()   
-
+            reset_security_state()
             session.clear()
             session["user"] = u
             session["otp_verified"] = True
             _current_user = u
-
-            model = storage.load_model(u)
-            if model:
-                dtm.model = model
-                print("Loaded Digital Twin:", u)
-
             return redirect("/dashboard")
 
         return render_template("login.html", error="Invalid credentials")
@@ -116,11 +249,9 @@ def login():
 
 @app.route("/logout")
 def logout():
-    global _current_user
     stop_monitoring()
-    reset_security_state()  
+    reset_security_state()
     session.clear()
-    _current_user = "unknown"
     return redirect("/")
 
 
@@ -135,10 +266,10 @@ def dashboard():
 def soc():
     return render_template("soc.html")
 
-
 # =====================================================
 # ENROLLMENT
 # =====================================================
+
 @app.route("/enroll", methods=["GET", "POST"])
 def enroll():
     global _current_user
@@ -150,7 +281,7 @@ def enroll():
         user = session["user"]
         _current_user = user
 
-        seconds = float(request.form.get("seconds", "60"))
+        seconds = float(request.form.get("seconds", "90"))
         interval = float(request.form.get("interval", "2"))
 
         samples: List[Dict[str, float]] = []
@@ -163,6 +294,10 @@ def enroll():
             samples.append(snap.features)
             time.sleep(interval)
 
+        # ✅ IMPORTANT FIX: delete old model before training new one
+        storage.delete_model(user)
+        dtm.model = None
+
         dtm.train(samples)
         storage.save_samples(user, samples)
         storage.save_model(user, dtm.model)
@@ -171,10 +306,10 @@ def enroll():
 
     return render_template("enroll.html", done=False, count=0)
 
+# =====================================================
+# OTP (OPTIONAL)
+# =====================================================
 
-# =====================================================
-# OTP
-# =====================================================
 def generate_otp():
     return str(secrets.randbelow(900000) + 100000)
 
@@ -207,13 +342,22 @@ def otp():
 
     return render_template("otp.html", error=error, otp_demo=session.get("otp_code"))
 
+# =====================================================
+# RISK API (THREAD SAFE)
+# =====================================================
+
+@app.route("/api/risk")
+def api_risk():
+    with _monitor_lock:
+        return jsonify(_latest_risk)
 
 # =====================================================
-# MONITOR CONTROL
+# START/STOP API
 # =====================================================
+
 @app.route("/api/start_monitor", methods=["POST"])
 def api_start_monitor():
-    reset_security_state()  
+    reset_security_state()
     start_monitoring()
     return jsonify({"ok": True})
 
@@ -223,10 +367,20 @@ def api_stop_monitor():
     stop_monitoring()
     return jsonify({"ok": True})
 
+# =====================================================
+# RESET ENDPOINT
+# =====================================================
+
+@app.route("/api/reset_security", methods=["POST"])
+def api_reset_security():
+    stop_monitoring()
+    reset_security_state()
+    return jsonify({"reset": True})
 
 # =====================================================
-# ATTACK MODE
+# ATTACK MODE ENDPOINT
 # =====================================================
+
 @app.route("/api/attack_mode", methods=["POST"])
 def api_attack_mode():
     global _attack_mode, _attack_level, _attack_start_ts
@@ -240,35 +394,12 @@ def api_attack_mode():
     else:
         _attack_start_ts = None
 
-    print("ATTACK:", _attack_mode, "LEVEL:", _attack_level)
     return jsonify({"attack_mode": _attack_mode, "level": _attack_level})
 
-
 # =====================================================
-#  RESET ENDPOINT
+# ANALYTICS / EXTRAS
 # =====================================================
-@app.route("/api/reset_security", methods=["POST"])
-def api_reset_security():
-    stop_monitoring()
-    reset_security_state()
-    return jsonify({"reset": True})
 
-
-# =====================================================
-# RISK API
-# =====================================================
-@app.route("/api/risk")
-def api_risk():
-    if _latest_risk["action"] == "BLOCK":
-        stop_monitoring()
-        reset_security_state()  
-
-    return jsonify(_latest_risk)
-
-
-# =====================================================
-# ANALYTICS
-# =====================================================
 @app.route("/api/analytics")
 def api_analytics():
     return jsonify(evaluate_far_frr(session.get("user")))
@@ -276,7 +407,9 @@ def api_analytics():
 
 @app.route("/api/explain")
 def api_explain():
-    return jsonify(explain(_latest_risk["features"]))
+    with _monitor_lock:
+        feats = _latest_risk.get("features", {})
+    return jsonify(explain(feats))
 
 
 @app.route("/api/replay")
@@ -286,12 +419,14 @@ def api_replay():
 
 @app.route("/api/confidence")
 def api_confidence():
-    return jsonify({"confidence": _latest_risk["confidence"]})
+    with _monitor_lock:
+        return jsonify({"confidence": _latest_risk.get("confidence", 100)})
 
 
 @app.route("/api/fingerprint")
 def api_fingerprint():
-    return jsonify({"fingerprint": _latest_risk["fingerprint_score"]})
+    with _monitor_lock:
+        return jsonify({"fingerprint": _latest_risk.get("fingerprint_score", 100)})
 
 
 @app.route("/api/soc_live")
@@ -314,67 +449,35 @@ def api_heatmap():
         buckets[hour] += 1
     return jsonify(buckets)
 
+# =====================================================
+# USER SETTINGS (BACKGROUND COLOR)
+# =====================================================
+
+@app.route("/api/settings/color", methods=["GET"])
+def api_get_color():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    return jsonify({
+        "background_color": storage.get_user_color(session["user"])
+    })
+
+
+@app.route("/api/settings/color", methods=["POST"])
+def api_set_color():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    color = data.get("color")
+
+    if not color:
+        return jsonify({"error": "Color required"}), 400
+
+    storage.save_user_color(session["user"], color)
+    return jsonify({"saved": True, "background_color": color})
 
 # =====================================================
-# MONITOR LOOP
-# =====================================================
-def monitor_loop():
-    global _latest_risk, _monitor_running
-
-    collector.start()
-    last_lock = 0.0
-
-    while _monitor_running:
-
-        if _attack_mode:
-            features = generate_attacker_features(
-                level=_attack_level,
-                start_ts=_attack_start_ts
-            )
-        else:
-            features = collector.snapshot().features
-
-        res = dtm.evaluate(features)
-
-        _latest_risk = {
-            "risk_score": res.risk_score,
-            "level": res.level,
-            "action": res.action,
-            "confidence": confidence_score(res.anomaly_score),
-            "fingerprint_score": fingerprint_similarity(features),
-            "ts": time.time(),
-            "otp_required": (res.action == "STEP_UP"),
-            "features": features,
-            "attack_mode": _attack_mode,
-            "attack_level": _attack_level,
-        }
-
-        risk_logger.log_risk(_latest_risk)
-        soc_monitor.update_user(_current_user, _latest_risk)
-
-        if res.action == "BLOCK":
-            now = time.time()
-            if now - last_lock > 30:
-                lock_windows()
-                last_lock = now
-
-        time.sleep(1)
-
-
-def start_monitoring():
-    global _monitor_running, _monitor_thread
-    if _monitor_running:
-        return
-
-    _monitor_running = True
-    _monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
-    _monitor_thread.start()
-
-
-def stop_monitoring():
-    global _monitor_running
-    _monitor_running = False
-
 
 if __name__ == "__main__":
-    app.run(debug=True, use_reloader=False)
+    app.run(debug=True, threaded=True, use_reloader=False)

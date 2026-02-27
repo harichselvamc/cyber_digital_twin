@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 </head>
 
 <body>
@@ -37,9 +38,11 @@
         <a href="/enroll" class="nav-link">
           <i class="fa-solid fa-fingerprint"></i> Enrollment
         </a>
-        <a href="javascript:void(0)" onclick="alert('Settings module is under development.')" class="nav-link">
+        <div class="nav-link" style="position: relative; cursor: pointer; margin-bottom: 0.25rem;">
           <i class="fa-solid fa-sliders"></i> Settings
-        </a>
+          <input type="color" id="colorPicker"
+            style="opacity: 0; position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: pointer;" />
+        </div>
       </nav>
 
       <div style="margin-top: auto;">
@@ -182,8 +185,16 @@
           <div class="chart-header">
             <span class="label-sm">Anomaly Attribution (Feature Importance)</span>
           </div>
-          <div style="flex: 1; position: relative;">
-            <canvas id="explainChart"></canvas>
+          <div style="flex: 1; display: flex; gap: 1rem; min-height: 0;">
+            <!-- Feature Labels & Info Column -->
+            <div id="featureLegend"
+              style="display: flex; flex-direction: column; justify-content: space-around; padding-bottom: 30px; padding-top: 10px;">
+              <!-- Dynamically populated -->
+            </div>
+            <!-- Chart Canvas -->
+            <div style="flex: 1; position: relative;">
+              <canvas id="explainChart"></canvas>
+            </div>
           </div>
         </div>
 
@@ -229,6 +240,38 @@
 
     // Let's quickly patch updateRisk in dashboard.js to standard IDs?
     // OR we just map the logic here in a valid override.
+  </script>
+
+  <!-- Modal for Feature Details -->
+  <div id="featureModal" class="modal-overlay" onclick="closeModal()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div class="modal-header">
+        <h3 id="modalFeatureTitle" class="modal-title">Feature Name</h3>
+      </div>
+      <div class="modal-body">
+        <div>
+          <div class="modal-section-title">Meaning</div>
+          <div id="modalMeaning" class="modal-text">...</div>
+        </div>
+        <div>
+          <div class="modal-section-title">Explanation</div>
+          <div id="modalExplanation" class="modal-text">...</div>
+        </div>
+        <div>
+          <div class="modal-section-title">Example</div>
+          <div id="modalExample" class="modal-text modal-example">...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function closeModal() {
+      document.getElementById('featureModal').classList.remove('active');
+    }
   </script>
 
 </body>
