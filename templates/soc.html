@@ -5,7 +5,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SOC View | CDT-MFA</title>
-  <!-- Fonts: Inter & JetBrains Mono -->
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap"
     rel="stylesheet">
@@ -13,45 +12,17 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
   <style>
-    .soc-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1rem;
-    }
-
-    .soc-table th,
-    .soc-table td {
-      text-align: left;
-      padding: 1rem;
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .soc-table th {
-      color: var(--text-muted);
-      font-weight: 500;
-      text-transform: uppercase;
-      font-size: 0.75rem;
-      letter-spacing: 0.05em;
-    }
-
-    .soc-table tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    .status-dot {
-      height: 8px;
-      width: 8px;
-      border-radius: 50%;
-      display: inline-block;
-      margin-right: 0.5rem;
-    }
+    .soc-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    .soc-table th, .soc-table td { text-align: left; padding: 1rem; border-bottom: 1px solid var(--border-color); }
+    .soc-table th { color: var(--text-muted); font-weight: 500; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+    .soc-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
   </style>
 </head>
 
 <body>
 
   <div class="dashboard-grid">
-    <!-- Sidebar (Shared) -->
+    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="brand">
         <i class="fa-solid fa-layer-group"></i>
@@ -67,6 +38,11 @@
           <i class="fa-solid fa-network-wired"></i> Live Analysts
         </a>
 
+        <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 2rem;">Verification</span>
+        <a href="/captcha" class="nav-link">
+          <i class="fa-solid fa-keyboard"></i> Behavioral CAPTCHA
+        </a>
+
         <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 2rem;">Configuration</span>
         <a href="/enroll" class="nav-link">
           <i class="fa-solid fa-fingerprint"></i> Enrollment
@@ -79,7 +55,6 @@
       </nav>
 
       <div style="margin-top: auto;">
-        <!-- Simplified User Panel for SOC View -->
         <div class="panel" style="padding: 1rem; margin-bottom: 1rem;">
           <div class="label-sm">Active Analyst</div>
           <div style="font-weight: 600;">{{ user }}</div>
@@ -94,24 +69,34 @@
     <main class="main-content">
 
       <!-- Header -->
-      <header style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: end;">
+      <header style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: end; flex-wrap: wrap; gap: 1rem;">
         <div>
           <h2>SOC Surveillance</h2>
-          <div style="color: var(--text-muted); font-size: 0.9rem;">Real-time session monitoring and intervention
-            console.</div>
+          <div style="color: var(--text-muted); font-size: 0.9rem;">Real-time session monitoring and intervention console.</div>
         </div>
-        <div id="connectionStatus" class="badge"
-          style="background: rgba(16, 185, 129, 0.1); color: var(--success-color);">
-          <i class="fa-solid fa-circle" style="font-size: 6px; margin-right: 5px; vertical-align: middle;"></i> Live
-          Feed
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+          <div id="connectionStatus" class="badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success-color);">
+            <i class="fa-solid fa-circle" style="font-size: 6px; margin-right: 5px; vertical-align: middle;"></i> Live Feed
+          </div>
+          <button id="globalLockdownBtn" class="btn btn-outline" onclick="toggleGlobalLockdown()"
+            style="padding: 0.4rem 0.8rem; font-size: 0.8rem; color: var(--danger-color); border-color: var(--danger-color);">
+            <i class="fa-solid fa-shield-halved"></i> Emergency Lockdown
+          </button>
         </div>
       </header>
+
+      <!-- Lockdown Banner -->
+      <div id="lockdownBanner"
+        style="display: none; padding: 1rem; border-radius: 6px; background: rgba(239, 68, 68, 0.15); border: 2px solid var(--danger-color); margin-bottom: 1.5rem; text-align: center;">
+        <i class="fa-solid fa-triangle-exclamation" style="color: var(--danger-color); font-size: 1.5rem;"></i>
+        <h3 style="color: var(--danger-color); margin: 0.5rem 0 0.25rem;">GLOBAL EMERGENCY LOCKDOWN ACTIVE</h3>
+        <p style="color: var(--text-muted); margin: 0;">All sessions are locked. Click "Emergency Lockdown" to release.</p>
+      </div>
 
       <!-- SOC Table Panel -->
       <div class="panel" style="min-height: 500px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
           <h3 style="font-size: 1.1rem; margin: 0;">Active Sessions</h3>
-
           <div style="display: flex; gap: 0.5rem;">
             <button class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
               <i class="fa-solid fa-filter"></i> Filter
@@ -130,18 +115,71 @@
               <th>Threat Level</th>
               <th>Recommended Action</th>
               <th>Last Activity</th>
+              <th>Controls</th>
             </tr>
           </thead>
           <tbody id="socTableBody">
-            <!-- Populated by JS -->
           </tbody>
         </table>
+      </div>
+
+      <!-- Lockdown Audit Log -->
+      <div class="panel" style="margin-top: 1.5rem;">
+        <div class="chart-header">
+          <span class="label-sm">Lockdown Audit Log</span>
+        </div>
+        <div id="lockdownLog" style="max-height: 200px; overflow-y: auto; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);">
+          <p style="text-align: center; padding: 1rem;">No lockdown events recorded.</p>
+        </div>
       </div>
 
     </main>
   </div>
 
   <script>
+    let globalLockdown = false;
+
+    async function toggleGlobalLockdown() {
+      globalLockdown = !globalLockdown;
+      const btn = document.getElementById('globalLockdownBtn');
+      const banner = document.getElementById('lockdownBanner');
+
+      const endpoint = globalLockdown ? '/api/lockdown/activate' : '/api/lockdown/deactivate';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', reason: 'SOC emergency lockdown' })
+      });
+
+      if (res.ok) {
+        if (globalLockdown) {
+          btn.innerHTML = '<i class="fa-solid fa-lock-open"></i> Release Lockdown';
+          btn.style.background = 'rgba(239, 68, 68, 0.15)';
+          banner.style.display = 'block';
+        } else {
+          btn.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Emergency Lockdown';
+          btn.style.background = '';
+          banner.style.display = 'none';
+        }
+      }
+    }
+
+    async function lockUser(user) {
+      await fetch('/api/lockdown/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'user', target_user: user, reason: 'SOC analyst action' })
+      });
+    }
+
+    async function unlockUser(user) {
+      await fetch('/api/lockdown/deactivate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'user', target_user: user })
+      });
+    }
+
     // Polling for SOC data
     setInterval(async () => {
       try {
@@ -156,43 +194,41 @@
           const info = data[user];
           const row = document.createElement('tr');
 
-          let levelBadgeClass = 'badge-green';
-          if (info.level === 'MEDIUM') levelBadgeClass = 'badge-yellow';
-          if (info.level === 'HIGH') levelBadgeClass = 'badge-red';
-
-          // Badge style manual override for table context if needed or use utility
           let badgeStyle = '';
           if (info.level === 'LOW') badgeStyle = 'background: rgba(16, 185, 129, 0.1); color: var(--success-color);';
           if (info.level === 'MEDIUM') badgeStyle = 'background: rgba(245, 158, 11, 0.1); color: var(--warning-color);';
           if (info.level === 'HIGH') badgeStyle = 'background: rgba(239, 68, 68, 0.1); color: var(--danger-color);';
 
-
           const date = new Date(info.time * 1000).toLocaleTimeString();
 
-          // Risk Score Color
           let scoreColor = 'var(--text-main)';
           if (info.risk_score > 70) scoreColor = 'var(--danger-color)';
           else if (info.risk_score > 30) scoreColor = 'var(--warning-color)';
 
           row.innerHTML = `
-                    <td style="font-weight: 600; color: var(--text-main);">
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
-                            <div style="width: 32px; height: 32px; background: var(--surface-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);">
-                                <i class="fa-solid fa-user" style="color: var(--text-muted); font-size: 0.8rem;"></i>
-                            </div>
-                            <div>
-                                <div>${user}</div>
-                                <div style="font-size: 0.75rem; color: var(--primary-color);">Session Active</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td style="font-family: var(--font-mono); font-weight: 700; color: ${scoreColor};">${Math.round(info.risk_score)}</td>
-                    <td><span class="badge" style="${badgeStyle}">${info.level}</span></td>
-                    <td style="font-weight: 500; color: ${info.action === 'BLOCK' ? 'var(--danger-color)' : (info.action === 'STEP_UP' ? 'var(--warning-color)' : 'var(--success-color)')}">
-                        ${info.action}
-                    </td>
-                    <td style="font-family: var(--font-mono); font-size: 0.9rem; color: var(--text-muted);">${date}</td>
-                `;
+            <td style="font-weight: 600; color: var(--text-main);">
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div style="width: 32px; height: 32px; background: var(--surface-color); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);">
+                  <i class="fa-solid fa-user" style="color: var(--text-muted); font-size: 0.8rem;"></i>
+                </div>
+                <div>
+                  <div>${user}</div>
+                  <div style="font-size: 0.75rem; color: var(--primary-color);">Session Active</div>
+                </div>
+              </div>
+            </td>
+            <td style="font-family: var(--font-mono); font-weight: 700; color: ${scoreColor};">${Math.round(info.risk_score)}</td>
+            <td><span class="badge" style="${badgeStyle}">${info.level}</span></td>
+            <td style="font-weight: 500; color: ${info.action === 'BLOCK' ? 'var(--danger-color)' : (info.action === 'STEP_UP' ? 'var(--warning-color)' : 'var(--success-color)')}">
+              ${info.action}
+            </td>
+            <td style="font-family: var(--font-mono); font-size: 0.9rem; color: var(--text-muted);">${date}</td>
+            <td>
+              <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; color: var(--danger-color); border-color: var(--danger-color);" onclick="lockUser('${user}')">
+                <i class="fa-solid fa-lock"></i> Lock
+              </button>
+            </td>
+          `;
           tbody.appendChild(row);
         });
 
@@ -208,6 +244,46 @@
         statusEl.style.background = 'rgba(239, 68, 68, 0.1)';
       }
     }, 1000);
+
+    // Lockdown status polling
+    setInterval(async () => {
+      try {
+        const res = await fetch('/api/lockdown/status');
+        if (res.ok) {
+          const status = await res.json();
+          const banner = document.getElementById('lockdownBanner');
+          const btn = document.getElementById('globalLockdownBtn');
+
+          if (status.global_lockdown && !globalLockdown) {
+            globalLockdown = true;
+            banner.style.display = 'block';
+            btn.innerHTML = '<i class="fa-solid fa-lock-open"></i> Release Lockdown';
+            btn.style.background = 'rgba(239, 68, 68, 0.15)';
+          }
+        }
+
+        // Fetch lockdown log
+        const logRes = await fetch('/api/lockdown/log');
+        if (logRes.ok) {
+          const log = await logRes.json();
+          const logEl = document.getElementById('lockdownLog');
+          if (log.length > 0) {
+            logEl.innerHTML = log.slice(-20).reverse().map(entry => {
+              const time = new Date(entry.ts * 1000).toLocaleTimeString();
+              return `<div style="padding: 0.25rem 0; border-bottom: 1px solid var(--border-color);">
+                <span style="color: var(--text-muted);">[${time}]</span>
+                <span style="color: ${entry.action === 'activate' || entry.action === 'lock' ? 'var(--danger-color)' : 'var(--success-color)'};">
+                  ${entry.type.toUpperCase()} ${entry.action.toUpperCase()}
+                </span>
+                ${entry.user ? ' - User: ' + entry.user : ''}
+                ${entry.reason ? ' (' + entry.reason + ')' : ''}
+                <span style="color: var(--text-muted);"> by ${entry.initiated_by}</span>
+              </div>`;
+            }).join('');
+          }
+        }
+      } catch (e) { }
+    }, 3000);
   </script>
 </body>
 
