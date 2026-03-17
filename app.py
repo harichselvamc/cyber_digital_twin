@@ -21,6 +21,22 @@ from confidence import confidence_score
 from fingerprint import fingerprint_similarity
 from report_generator import generate_report
 
+# =====================================================
+# NEW MODULES (from proposal)
+# =====================================================
+from context_aware import (
+    DeviceFingerprint,
+    register_login,
+    evaluate_context_risk,
+    get_context_summary,
+)
+from multi_model_fusion import FusionModel
+from drift_detection import drift_detector
+from behavioral_captcha import behavioral_captcha
+from silent_auth import silent_auth
+from performance_optimizer import performance_optimizer, screen_analyzer
+from emergency_lockdown import emergency_lockdown
+
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-change-me"
@@ -33,6 +49,7 @@ USERS = {"admin": "admin123", "user2": "pass123"}
 
 collector = BehaviorCollector(window_seconds=10.0)
 dtm = DigitalTwinModel()
+fusion_model = FusionModel()
 
 _monitor_executor = ThreadPoolExecutor(max_workers=1)
 _monitor_stop_event = threading.Event()
@@ -55,6 +72,10 @@ _latest_risk = {
     "features": {},
     "attack_mode": False,
     "attack_level": 0,
+    "context_flags": [],
+    "fusion_scores": {},
+    "drift_status": "stable",
+    "silent_mode": False,
 }
 
 # =====================================================
@@ -80,10 +101,17 @@ def reset_security_state():
             "features": {},
             "attack_mode": False,
             "attack_level": 0,
+            "context_flags": [],
+            "fusion_scores": {},
+            "drift_status": "stable",
+            "silent_mode": False,
         }
 
+    performance_optimizer.reset()
+    silent_auth.reset()
+
 # =====================================================
-# MONITOR LOOP (REALISTIC + PERSISTENT)
+# MONITOR LOOP (ENHANCED WITH NEW MODULES)
 # =====================================================
 
 def monitor_loop(user):
@@ -93,21 +121,55 @@ def monitor_loop(user):
     if model:
         dtm.model = model
 
+    # Initialize drift detector with enrollment samples
+    samples = storage.load_samples(user)
+    if samples:
+        drift_detector.set_baseline(samples)
+        fusion_model.train(samples)
+
     collector.start()
 
     # Lock control
     last_lock = 0.0
-    LOCK_COOLDOWN_SECONDS = 10.0  # prevent repeated locking spam
+    LOCK_COOLDOWN_SECONDS = 10.0
 
-    # Persistence control: require consecutive "BLOCK" decisions before locking
+    # Persistence control
     block_streak = 0
-    REQUIRED_BLOCK_STREAK = 2  # realistic persistence (not time-based)
+    REQUIRED_BLOCK_STREAK = 2
 
     while not _monitor_stop_event.is_set():
 
         start_cycle = time.time()
 
         try:
+            # -------------------------
+            # EMERGENCY LOCKDOWN CHECK
+            # -------------------------
+            if emergency_lockdown.is_locked(user):
+                risk_data = {
+                    "risk_score": 100,
+                    "level": "HIGH",
+                    "action": "BLOCK",
+                    "confidence": 0,
+                    "fingerprint_score": 0,
+                    "ts": time.time(),
+                    "otp_required": False,
+                    "features": {},
+                    "attack_mode": _attack_mode,
+                    "attack_level": _attack_level,
+                    "context_flags": ["emergency_lockdown"],
+                    "fusion_scores": {},
+                    "drift_status": "alarm",
+                    "silent_mode": silent_auth.enabled,
+                    "lockdown_reason": emergency_lockdown.get_lock_reason(user),
+                }
+                with _monitor_lock:
+                    _latest_risk = risk_data
+                risk_logger.log_risk(risk_data)
+                soc_monitor.update_user(user, risk_data)
+                time.sleep(2.0)
+                continue
+
             # -------------------------
             # FEATURE SOURCE
             # -------------------------
@@ -118,6 +180,13 @@ def monitor_loop(user):
                 )
             else:
                 features = collector.snapshot().features
+                performance_optimizer.report_activity()
+
+            # -------------------------
+            # DRIFT DETECTION
+            # -------------------------
+            drift_detector.observe(features)
+            drift_result = drift_detector.compute_drift()
 
             # -------------------------
             # OPTIONAL POLICY BOOST
@@ -126,19 +195,46 @@ def monitor_loop(user):
             if _attack_mode and _attack_level >= 3:
                 policy_boost = 10.0
 
-            # Model evaluation
+            # Context risk boost
+            context_result = {"context_risk_boost": 0, "flags": []}
+            # (Context is evaluated at login, but we can add time-based checks)
+            current_hour = time.localtime().tm_hour
+            if current_hour in range(0, 6):
+                policy_boost += 5.0
+                context_result["flags"].append("late_night_session")
+
+            # Screen activity risk boost
+            screen_boost = screen_analyzer.get_risk_boost()
+            policy_boost += screen_boost
+
+            # Model evaluation (primary)
             res = dtm.evaluate(features, policy_boost=policy_boost)
+
+            # -------------------------
+            # MULTI-MODEL FUSION
+            # -------------------------
+            fusion_result = fusion_model.evaluate(features)
+            fusion_risk = fusion_result.get("fused_score", 0)
+
+            # Blend: primary model weighted 0.65, fusion 0.35
+            blended_risk = res.risk_score * 0.65 + fusion_risk * 0.35
 
             # -------------------------
             # Fingerprint -> risk adjustment
             # -------------------------
             fp = fingerprint_similarity(features)
 
-            adjusted_risk = float(res.risk_score)
+            adjusted_risk = float(blended_risk)
             if fp < 60:
                 adjusted_risk = min(100.0, adjusted_risk + 10.0)
             if fp < 40:
                 adjusted_risk = min(100.0, adjusted_risk + 20.0)
+
+            # Drift-based adjustment
+            if drift_result.get("is_alarm"):
+                adjusted_risk = min(100.0, adjusted_risk + 8.0)
+            elif drift_result.get("is_drifting"):
+                adjusted_risk = min(100.0, adjusted_risk + 3.0)
 
             # Update action based on adjusted_risk thresholds
             action = res.action
@@ -164,6 +260,10 @@ def monitor_loop(user):
                 "features": features,
                 "attack_mode": _attack_mode,
                 "attack_level": _attack_level,
+                "context_flags": context_result.get("flags", []),
+                "fusion_scores": fusion_result.get("model_scores", {}),
+                "drift_status": drift_result.get("status", "stable"),
+                "silent_mode": silent_auth.enabled,
             }
 
             with _monitor_lock:
@@ -171,6 +271,16 @@ def monitor_loop(user):
 
             risk_logger.log_risk(risk_data)
             soc_monitor.update_user(user, risk_data)
+
+            # -------------------------
+            # SILENT AUTH OBSERVATION
+            # -------------------------
+            notification = silent_auth.observe(risk_data)
+
+            # -------------------------
+            # PERFORMANCE OPTIMIZER
+            # -------------------------
+            performance_optimizer.report_risk(adjusted_risk)
 
             # -------------------------
             # REALISTIC ENFORCEMENT: persistence-based lock
@@ -190,9 +300,10 @@ def monitor_loop(user):
         except Exception as e:
             print("Monitor error:", e)
 
-        # Adaptive sleep
+        # Adaptive sleep (performance optimizer)
         elapsed = time.time() - start_cycle
-        sleep_time = max(0.3, 1.0 - elapsed)
+        optimal = performance_optimizer.get_optimal_interval()
+        sleep_time = max(0.3, optimal - elapsed)
         time.sleep(sleep_time)
 
 # =====================================================
@@ -240,6 +351,26 @@ def login():
             session["user"] = u
             session["otp_verified"] = True
             _current_user = u
+
+            # Context-aware: register login with device fingerprint
+            device = DeviceFingerprint(
+                ip_address=request.remote_addr or "",
+                user_agent=request.headers.get("User-Agent", ""),
+                screen_resolution=request.form.get("screen_res", ""),
+                timezone=request.form.get("timezone", ""),
+                language=request.headers.get("Accept-Language", ""),
+            )
+            register_login(u, device)
+
+            # Evaluate context risk at login
+            context_risk = evaluate_context_risk(u, device)
+            session["context_flags"] = context_risk.get("flags", [])
+
+            # If new device or new IP, force OTP
+            if "new_device" in context_risk.get("flags", []) or "new_ip" in context_risk.get("flags", []):
+                session["otp_verified"] = False
+                return redirect("/otp")
+
             return redirect("/dashboard")
 
         return render_template("login.html", error="Invalid credentials")
@@ -264,7 +395,9 @@ def dashboard():
 
 @app.route("/soc")
 def soc():
-    return render_template("soc.html")
+    if "user" not in session:
+        return redirect("/login")
+    return render_template("soc.html", user=session["user"])
 
 # =====================================================
 # ENROLLMENT
@@ -294,7 +427,7 @@ def enroll():
             samples.append(snap.features)
             time.sleep(interval)
 
-        # ✅ IMPORTANT FIX: delete old model before training new one
+        # Delete old model before training new one
         storage.delete_model(user)
         dtm.model = None
 
@@ -302,9 +435,15 @@ def enroll():
         storage.save_samples(user, samples)
         storage.save_model(user, dtm.model)
 
-        return render_template("enroll.html", done=True, count=len(samples))
+        # Train fusion model as well
+        fusion_model.train(samples)
 
-    return render_template("enroll.html", done=False, count=0)
+        # Initialize drift detector baseline
+        drift_detector.set_baseline(samples)
+
+        return render_template("enroll.html", done=True, count=len(samples), user=session["user"])
+
+    return render_template("enroll.html", done=False, count=0, user=session["user"])
 
 # =====================================================
 # OTP (OPTIONAL)
@@ -341,6 +480,54 @@ def otp():
             error = "Invalid OTP"
 
     return render_template("otp.html", error=error, otp_demo=session.get("otp_code"))
+
+# =====================================================
+# BEHAVIORAL CAPTCHA ROUTES
+# =====================================================
+
+@app.route("/captcha", methods=["GET"])
+def captcha_page():
+    if "user" not in session:
+        return redirect("/login")
+    return render_template("captcha.html", user=session["user"])
+
+
+@app.route("/api/captcha/generate", methods=["POST"])
+def api_captcha_generate():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    challenge_type = data.get("type", "typing")
+    challenge = behavioral_captcha.generate_challenge(session["user"], challenge_type)
+    return jsonify(challenge)
+
+
+@app.route("/api/captcha/verify_typing", methods=["POST"])
+def api_captcha_verify_typing():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    result = behavioral_captcha.verify_typing_challenge(
+        user=session["user"],
+        typed_text=data.get("typed_text", ""),
+        keystroke_timings=data.get("keystroke_timings", []),
+    )
+    return jsonify(result)
+
+
+@app.route("/api/captcha/verify_pattern", methods=["POST"])
+def api_captcha_verify_pattern():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    result = behavioral_captcha.verify_pattern_challenge(
+        user=session["user"],
+        mouse_points=data.get("mouse_points", []),
+    )
+    return jsonify(result)
 
 # =====================================================
 # RISK API (THREAD SAFE)
@@ -448,6 +635,148 @@ def api_heatmap():
         hour = int((h["ts"] % 86400) // 3600)
         buckets[hour] += 1
     return jsonify(buckets)
+
+# =====================================================
+# NEW API ENDPOINTS
+# =====================================================
+
+# --- Context-Aware ---
+@app.route("/api/context")
+def api_context():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify(get_context_summary(session["user"]))
+
+
+@app.route("/api/context/flags")
+def api_context_flags():
+    with _monitor_lock:
+        return jsonify({
+            "flags": _latest_risk.get("context_flags", []),
+        })
+
+# --- Multi-Model Fusion ---
+@app.route("/api/fusion")
+def api_fusion():
+    with _monitor_lock:
+        return jsonify({
+            "fusion_scores": _latest_risk.get("fusion_scores", {}),
+        })
+
+# --- Drift Detection ---
+@app.route("/api/drift")
+def api_drift():
+    result = drift_detector.compute_drift()
+    result["should_retrain"] = drift_detector.should_retrain()
+    return jsonify(result)
+
+
+@app.route("/api/drift/history")
+def api_drift_history():
+    return jsonify(drift_detector.get_drift_history())
+
+# --- Silent Auth Mode ---
+@app.route("/api/silent_auth/toggle", methods=["POST"])
+def api_silent_auth_toggle():
+    data = request.get_json(silent=True) or {}
+    if data.get("enable", False):
+        silent_auth.enable()
+    else:
+        silent_auth.disable()
+    return jsonify({"enabled": silent_auth.enabled})
+
+
+@app.route("/api/silent_auth/status")
+def api_silent_auth_status():
+    return jsonify({
+        "enabled": silent_auth.enabled,
+        "stats": silent_auth.get_stats(),
+    })
+
+
+@app.route("/api/silent_auth/notifications")
+def api_silent_auth_notifications():
+    return jsonify(silent_auth.get_notifications())
+
+# --- Performance Optimizer ---
+@app.route("/api/performance")
+def api_performance():
+    return jsonify(performance_optimizer.get_stats())
+
+# --- Screen Activity ---
+@app.route("/api/screen_activity", methods=["POST"])
+def api_screen_activity():
+    data = request.get_json(silent=True) or {}
+    result = screen_analyzer.record_switch(
+        from_app=data.get("from_app", ""),
+        to_app=data.get("to_app", ""),
+    )
+    return jsonify({
+        "switch_rate": screen_analyzer.get_switch_rate(),
+        "risk_boost": screen_analyzer.get_risk_boost(),
+        "alert": result,
+    })
+
+# --- Emergency Lockdown ---
+@app.route("/api/lockdown/activate", methods=["POST"])
+def api_lockdown_activate():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    scope = data.get("scope", "global")
+    reason = data.get("reason", "Security breach")
+
+    if scope == "global":
+        result = emergency_lockdown.activate_global_lockdown(
+            reason=reason,
+            initiated_by=session["user"],
+        )
+    else:
+        target_user = data.get("target_user", "")
+        if not target_user:
+            return jsonify({"error": "target_user required"}), 400
+        result = emergency_lockdown.lock_user(
+            user=target_user,
+            reason=reason,
+            initiated_by=session["user"],
+        )
+
+    return jsonify(result)
+
+
+@app.route("/api/lockdown/deactivate", methods=["POST"])
+def api_lockdown_deactivate():
+    if "user" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    scope = data.get("scope", "global")
+
+    if scope == "global":
+        result = emergency_lockdown.deactivate_global_lockdown(
+            initiated_by=session["user"],
+        )
+    else:
+        target_user = data.get("target_user", "")
+        if not target_user:
+            return jsonify({"error": "target_user required"}), 400
+        result = emergency_lockdown.unlock_user(
+            user=target_user,
+            initiated_by=session["user"],
+        )
+
+    return jsonify(result)
+
+
+@app.route("/api/lockdown/status")
+def api_lockdown_status():
+    return jsonify(emergency_lockdown.get_status())
+
+
+@app.route("/api/lockdown/log")
+def api_lockdown_log():
+    return jsonify(emergency_lockdown.get_log())
 
 # =====================================================
 # USER SETTINGS (BACKGROUND COLOR)
