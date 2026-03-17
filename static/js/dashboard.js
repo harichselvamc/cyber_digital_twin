@@ -1,7 +1,9 @@
-// Dashboard Logic
+// Dashboard Logic (Enhanced with new modules)
 
 let monitorRunning = false;
 let attackMode = false;
+let silentMode = false;
+let lockdownActive = false;
 let pollingInterval = null;
 
 // Charts instances
@@ -55,8 +57,6 @@ const featureMetadata = {
 document.addEventListener('DOMContentLoaded', () => {
     initCharts();
     fetchAnalytics();
-
-    // Start polling immediately for status updates
     startPolling();
 });
 
@@ -66,19 +66,16 @@ async function toggleMonitor() {
     const btn = document.getElementById('monitorBtn');
 
     if (!monitorRunning) {
-        // Start
         const res = await fetch('/api/start_monitor', { method: 'POST' });
         if (res.ok) {
             monitorRunning = true;
             btn.innerHTML = '<i class="fa-solid fa-square"></i> Stop Monitor';
             btn.classList.replace('btn-primary', 'btn-danger');
 
-            // Pulse logic if element exists (it might not in new UI, or different ID)
             const pulse = document.getElementById('systemPulse');
             if (pulse) pulse.style.backgroundColor = 'var(--success-color)';
         }
     } else {
-        // Stop
         const res = await fetch('/api/stop_monitor', { method: 'POST' });
         if (res.ok) {
             monitorRunning = false;
@@ -96,7 +93,6 @@ async function resetSecurity() {
     if (res.ok) {
         const data = await res.json();
         if (data.reset) {
-            // Restore UI state
             monitorRunning = false;
             const btn = document.getElementById('monitorBtn');
             btn.innerHTML = '<i class="fa-solid fa-play"></i> Start Monitor';
@@ -106,12 +102,56 @@ async function resetSecurity() {
             const pulse = document.getElementById('systemPulse');
             if (pulse) pulse.style.backgroundColor = 'var(--text-muted)';
 
-            // Hide any active alerts
             document.getElementById('alertArea').style.display = 'none';
+            document.getElementById('notificationBanner').style.display = 'none';
 
-            // Re-fetch everything to show fresh state
             updateRisk();
             fetchAnalytics();
+        }
+    }
+}
+
+async function toggleSilentMode() {
+    silentMode = !silentMode;
+    const btn = document.getElementById('silentModeBtn');
+
+    const res = await fetch('/api/silent_auth/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enable: silentMode })
+    });
+
+    if (res.ok) {
+        if (silentMode) {
+            btn.classList.remove('btn-outline');
+            btn.classList.add('btn-primary');
+            btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Silent ON';
+        } else {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline');
+            btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Silent';
+        }
+    }
+}
+
+async function toggleLockdown() {
+    lockdownActive = !lockdownActive;
+    const btn = document.getElementById('lockdownBtn');
+
+    const endpoint = lockdownActive ? '/api/lockdown/activate' : '/api/lockdown/deactivate';
+    const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: 'global', reason: 'Admin manual lockdown' })
+    });
+
+    if (res.ok) {
+        if (lockdownActive) {
+            btn.innerHTML = '<i class="fa-solid fa-lock-open"></i> Release';
+            btn.style.background = 'rgba(239, 68, 68, 0.1)';
+        } else {
+            btn.innerHTML = '<i class="fa-solid fa-lock"></i> Lockdown';
+            btn.style.background = '';
         }
     }
 }
@@ -149,10 +189,11 @@ function startPolling() {
         try {
             updateRisk();
             updateCharts();
+            updateNewModules();
         } catch (e) {
             console.error("Polling error:", e);
         }
-    }, 1000); // 1s primary poll
+    }, 1000);
 }
 
 async function updateRisk() {
@@ -160,13 +201,49 @@ async function updateRisk() {
     if (!res.ok) return;
     const data = await res.json();
 
-    // Update Text Metrics
     document.getElementById('riskScore').innerText = Math.round(data.risk_score);
     document.getElementById('confidenceScore').innerText = Math.round(data.confidence) + '%';
     document.getElementById('fingerprintScore').innerText = Math.round(data.fingerprint_score) + '%';
     document.getElementById('actionStatus').innerText = data.action;
 
-    // Analytics (Quick Update)
+    // Drift status
+    const driftEl = document.getElementById('driftStatus');
+    const driftBadge = document.getElementById('driftBadge');
+    const driftStatus = data.drift_status || 'stable';
+    driftEl.innerText = driftStatus.toUpperCase();
+    driftBadge.className = 'badge';
+    if (driftStatus === 'alarm') {
+        driftBadge.classList.add('badge-red');
+        driftBadge.innerText = 'Alert';
+    } else if (driftStatus === 'drifting') {
+        driftBadge.classList.add('badge-yellow');
+        driftBadge.innerText = 'Shifting';
+    } else {
+        driftBadge.classList.add('badge-green');
+        driftBadge.innerText = 'Normal';
+    }
+
+    // Fusion scores
+    const fusion = data.fusion_scores || {};
+    const ifScore = Math.round((fusion.isolation_forest || 0) * 100);
+    const svmScore = Math.round((fusion.one_class_svm || 0) * 100);
+    const aeScore = Math.round((fusion.autoencoder || 0) * 100);
+
+    document.getElementById('fusionIF').innerText = ifScore + '%';
+    document.getElementById('fusionSVM').innerText = svmScore + '%';
+    document.getElementById('fusionAE').innerText = aeScore + '%';
+    document.getElementById('fusionBarIF').style.width = ifScore + '%';
+    document.getElementById('fusionBarSVM').style.width = svmScore + '%';
+    document.getElementById('fusionBarAE').style.width = aeScore + '%';
+
+    // Context flags
+    const flags = data.context_flags || [];
+    const ctxFlagsEl = document.getElementById('ctxFlags');
+    if (ctxFlagsEl) {
+        ctxFlagsEl.innerText = flags.length > 0 ? flags.join(', ') : 'None';
+        ctxFlagsEl.style.color = flags.length > 0 ? 'var(--warning-color)' : 'var(--text-main)';
+    }
+
     fetchAnalytics();
 
     // Badge styling & Card Border
@@ -174,21 +251,18 @@ async function updateRisk() {
     const badge = document.getElementById('riskLevelBadge');
 
     badge.innerText = data.level;
-    riskCard.className = 'stat-card'; // reset
-    badge.className = 'badge'; // reset
+    riskCard.className = 'stat-card';
+    badge.className = 'badge';
 
     if (data.level === 'LOW') {
         badge.classList.add('badge-green');
-        riskCard.classList.add('risk-low');
     } else if (data.level === 'MEDIUM') {
         badge.classList.add('badge-yellow');
-        riskCard.classList.add('risk-med');
     } else {
         badge.classList.add('badge-red');
-        riskCard.classList.add('risk-high');
     }
 
-    // Handle Alerts (Unified Area)
+    // Handle Alerts
     const alertArea = document.getElementById('alertArea');
     const alertTitle = document.getElementById('alertTitle');
     const alertMsg = document.getElementById('alertMsg');
@@ -209,7 +283,7 @@ async function updateRisk() {
 
         alertBtn.innerText = "Verify OTP";
         alertBtn.href = "/otp";
-        alertBtn.className = "btn"; // Reset classes
+        alertBtn.className = "btn";
         alertBtn.style.backgroundColor = "var(--warning-color)";
         alertBtn.style.color = "#000";
 
@@ -221,18 +295,15 @@ async function updateRisk() {
         alertIcon.className = 'fa-solid fa-ban';
         alertIcon.style.color = 'var(--danger-color)';
 
-        alertTitle.innerText = "Session Locked";
+        alertTitle.innerText = data.lockdown_reason ? "Emergency Lockdown: " + data.lockdown_reason : "Session Locked";
         alertTitle.style.color = 'var(--danger-color)';
         alertMsg.innerText = "High risk activity. System access has been suspended.";
 
         alertBtn.innerText = "Reset Security";
-        alertBtn.onclick = (e) => {
-            e.preventDefault();
-            resetSecurity();
-        };
+        alertBtn.onclick = (e) => { e.preventDefault(); resetSecurity(); };
         alertBtn.href = "javascript:void(0)";
         alertBtn.className = "btn btn-danger";
-        alertBtn.style.backgroundColor = ""; // Clear inline style
+        alertBtn.style.backgroundColor = "";
         alertBtn.style.color = "";
 
         if (monitorRunning) {
@@ -248,15 +319,89 @@ async function updateRisk() {
     }
 }
 
+async function updateNewModules() {
+    // Context summary
+    try {
+        const ctxRes = await fetch('/api/context');
+        if (ctxRes.ok) {
+            const ctx = await ctxRes.json();
+            const devEl = document.getElementById('ctxDevices');
+            const ipEl = document.getElementById('ctxIPs');
+            const loginEl = document.getElementById('ctxLogins');
+            if (devEl) devEl.innerText = ctx.known_devices_count || 0;
+            if (ipEl) ipEl.innerText = ctx.known_ips_count || 0;
+            if (loginEl) loginEl.innerText = ctx.total_logins || 0;
+        }
+    } catch (e) { }
+
+    // Performance optimizer
+    try {
+        const perfRes = await fetch('/api/performance');
+        if (perfRes.ok) {
+            const perf = await perfRes.json();
+            const intEl = document.getElementById('perfInterval');
+            const savedEl = document.getElementById('perfSaved');
+            const effEl = document.getElementById('perfEfficiency');
+            const idleEl = document.getElementById('perfIdle');
+            if (intEl) intEl.innerText = perf.current_interval + 's';
+            if (savedEl) savedEl.innerText = perf.cycles_saved;
+            if (effEl) effEl.innerText = perf.efficiency_pct + '%';
+            if (idleEl) idleEl.innerText = perf.is_idle ? 'Yes' : 'No';
+        }
+    } catch (e) { }
+
+    // Drift metric
+    try {
+        const driftRes = await fetch('/api/drift');
+        if (driftRes.ok) {
+            const drift = await driftRes.json();
+            const driftMetric = document.getElementById('metricDrift');
+            if (driftMetric) driftMetric.innerText = (drift.overall_drift || 0).toFixed(4);
+        }
+    } catch (e) { }
+
+    // Silent auth notifications (gamified)
+    try {
+        const notifRes = await fetch('/api/silent_auth/notifications');
+        if (notifRes.ok) {
+            const notifs = await notifRes.json();
+            if (notifs.length > 0) {
+                const latest = notifs[notifs.length - 1];
+                const banner = document.getElementById('notificationBanner');
+                const icon = document.getElementById('notifIcon');
+                const msg = document.getElementById('notifMessage');
+
+                if (banner && msg) {
+                    msg.innerText = latest.message;
+
+                    if (latest.severity === 'critical') {
+                        banner.style.background = 'rgba(239, 68, 68, 0.1)';
+                        banner.style.borderColor = 'var(--danger-color)';
+                        icon.style.color = 'var(--danger-color)';
+                    } else if (latest.severity === 'warning') {
+                        banner.style.background = 'rgba(245, 158, 11, 0.1)';
+                        banner.style.borderColor = 'var(--warning-color)';
+                        icon.style.color = 'var(--warning-color)';
+                    } else {
+                        banner.style.background = 'rgba(59, 130, 246, 0.1)';
+                        banner.style.borderColor = 'var(--accent-color)';
+                        icon.style.color = 'var(--accent-color)';
+                    }
+                    banner.style.display = 'flex';
+                }
+            }
+        }
+    } catch (e) { }
+}
+
 async function fetchAnalytics() {
     try {
         const res = await fetch('/api/analytics');
         const data = await res.json();
-        // Update new specific IDs
         const farEl = document.getElementById('metricFAR');
         const frrEl = document.getElementById('metricFRR');
-        if (farEl) farEl.innerText = data.FAR.toFixed(4);
-        if (frrEl) frrEl.innerText = data.FRR.toFixed(4);
+        if (farEl && data.FAR !== undefined) farEl.innerText = data.FAR.toFixed(4);
+        if (frrEl && data.FRR !== undefined) frrEl.innerText = data.FRR.toFixed(4);
     } catch (e) { }
 }
 
@@ -265,19 +410,27 @@ function initCharts() {
     const ctxExplain = document.getElementById('explainChart').getContext('2d');
     const ctxHeatmap = document.getElementById('heatmapChart').getContext('2d');
 
-    // Theme Colors (Professional Light)
     const colorBorder = '#e2e8f0';
     const colorText = '#64748b';
     const colorPrimary = '#0f172a';
     const colorDanger = '#ef4444';
-    const colorSuccess = '#10b981';
 
-    // Common Options
     const commonOptions = {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-            legend: { display: false }
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#ffffff',
+                titleColor: '#0f172a',
+                bodyColor: '#475569',
+                borderColor: '#e2e8f0',
+                borderWidth: 1,
+                padding: 10,
+                cornerRadius: 8,
+                titleFont: { family: 'Inter', weight: 'bold' },
+                bodyFont: { family: 'Inter' }
+            }
         },
         scales: {
             x: {
@@ -292,23 +445,9 @@ function initCharts() {
         interaction: {
             mode: 'index',
             intersect: false,
-        },
-        plugins: {
-            tooltip: {
-                backgroundColor: '#ffffff',
-                titleColor: '#0f172a',
-                bodyColor: '#475569',
-                borderColor: '#e2e8f0',
-                borderWidth: 1,
-                padding: 10,
-                cornerRadius: 8,
-                titleFont: { family: 'Inter', weight: 'bold' },
-                bodyFont: { family: 'Inter' }
-            }
         }
     };
 
-    // 1. Replay Line Chart
     replayChartInstance = new Chart(ctxReplay, {
         type: 'line',
         data: {
@@ -317,7 +456,7 @@ function initCharts() {
                 label: 'Risk Score',
                 data: [],
                 borderColor: colorPrimary,
-                backgroundColor: 'rgba(59, 130, 246, 0.1)', // Blue transparent
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
                 borderWidth: 2,
                 tension: 0.3,
                 fill: true,
@@ -335,7 +474,6 @@ function initCharts() {
         }
     });
 
-    // 2. Explain Horizontal Bar
     explainChartInstance = new Chart(ctxExplain, {
         type: 'bar',
         data: {
@@ -353,19 +491,18 @@ function initCharts() {
             indexAxis: 'y',
             plugins: {
                 legend: { display: false },
-                tooltip: { enabled: false } // Disable default tooltips
+                tooltip: { enabled: false }
             },
             scales: {
                 x: { grid: { display: false }, ticks: { color: colorText } },
                 y: {
                     grid: { display: false },
-                    ticks: { display: false } // Hide ticks, we use HTML legend
+                    ticks: { display: false }
                 }
             }
         }
     });
 
-    // 3. Heatmap
     heatmapChartInstance = new Chart(ctxHeatmap, {
         type: 'bar',
         data: {
@@ -380,41 +517,29 @@ function initCharts() {
         options: {
             ...commonOptions,
             scales: {
-                x: { grid: { display: false }, ticks: { display: false } }, // Compact view
+                x: { grid: { display: false }, ticks: { display: false } },
                 y: { grid: { color: colorBorder }, ticks: { color: colorText } }
             }
         }
     });
 }
 
-
-// --- Charts Update Logic ---
-
 async function updateCharts() {
     try {
-        // 1. Replay (History)
         const replayRes = await fetch('/api/replay');
         if (replayRes.ok) {
             const replayData = await replayRes.json();
-
-            // Limit to last 50 points
-            // Limit to last 50 points
-            const recentData = replayData;
-
-            // Format for Chart.js
-            const labels = recentData.map(d => new Date(d.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-            const risks = recentData.map(d => d.risk);
+            const labels = replayData.map(d => new Date(d.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+            const risks = replayData.map(d => d.risk);
 
             replayChartInstance.data.labels = labels;
             replayChartInstance.data.datasets[0].data = risks;
             replayChartInstance.update();
         }
 
-        // 2. Explainability
         const explainRes = await fetch('/api/explain');
         if (explainRes.ok) {
             const explainData = await explainRes.json();
-
             const featureLabels = Object.keys(explainData);
             const featureValues = Object.values(explainData);
 
@@ -422,32 +547,28 @@ async function updateCharts() {
             explainChartInstance.data.datasets[0].data = featureValues;
             explainChartInstance.update();
 
-            // Render HTML Legend if not already or on update
             renderFeatureLegend(featureLabels);
         }
 
-        // 3. Heatmap
         const heatmapRes = await fetch('/api/heatmap');
         if (heatmapRes.ok) {
             const heatmapData = await heatmapRes.json();
             heatmapChartInstance.data.datasets[0].data = heatmapData;
             heatmapChartInstance.update();
         }
-
     } catch (e) {
         console.error("Chart update error:", e);
     }
 }
 
-// Update charts dynamically when theme changes to ensure contrast
+// Theme update listener
 window.addEventListener('themeUpdated', () => {
     if (!replayChartInstance || !explainChartInstance || !heatmapChartInstance) return;
 
     const colorBorder = window.isDarkTheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
     const colorText = window.isDarkTheme ? '#cbd5e1' : '#475569';
 
-    const charts = [replayChartInstance, explainChartInstance, heatmapChartInstance];
-    charts.forEach(chart => {
+    [replayChartInstance, explainChartInstance, heatmapChartInstance].forEach(chart => {
         if (chart.options.scales.x) {
             if (chart.options.scales.x.grid) chart.options.scales.x.grid.color = colorBorder;
             if (chart.options.scales.x.ticks) chart.options.scales.x.ticks.color = colorText;
@@ -459,7 +580,6 @@ window.addEventListener('themeUpdated', () => {
         chart.update();
     });
 
-    // Explain chart bar colors (we want them visible)
     explainChartInstance.data.datasets[0].backgroundColor = window.isDarkTheme ? '#94a3b8' : '#0f172a';
     explainChartInstance.update();
 });
@@ -469,7 +589,6 @@ window.addEventListener('themeUpdated', () => {
 let currentFeatureLabels = [];
 
 function renderFeatureLegend(labels) {
-    // Only re-render if labels changed or legend is empty
     const container = document.getElementById('featureLegend');
     if (!container) return;
 
@@ -482,7 +601,6 @@ function renderFeatureLegend(labels) {
     labels.forEach(label => {
         const row = document.createElement('div');
         row.className = 'feature-info-row';
-
         row.innerHTML = `
             <span class="feature-name">${label}</span>
             <button class="info-btn" onclick="showFeatureInfo('${label}')" title="Click for details">
