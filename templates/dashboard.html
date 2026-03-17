@@ -5,7 +5,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SOC Command Center | CDT-MFA</title>
-  <!-- Fonts: Inter & JetBrains Mono -->
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap"
     rel="stylesheet">
@@ -32,6 +31,11 @@
         </a>
         <a href="/soc" class="nav-link">
           <i class="fa-solid fa-network-wired"></i> Live Analysts
+        </a>
+
+        <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 2rem;">Verification</span>
+        <a href="/captcha" class="nav-link">
+          <i class="fa-solid fa-keyboard"></i> Behavioral CAPTCHA
         </a>
 
         <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 2rem;">Configuration</span>
@@ -64,13 +68,27 @@
     <main class="main-content">
 
       <!-- Top Bar -->
-      <header style="display: flex; justify-content: space-between; align-items: center;">
+      <header style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
         <div>
           <h2 style="margin: 0;">Security Operations</h2>
           <div style="color: var(--text-muted); font-size: 0.9rem;">Real-time behavioral analysis session</div>
         </div>
 
-        <div style="display: flex; gap: 1rem; align-items: center;">
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+          <!-- Silent Mode Toggle -->
+          <button id="silentModeBtn" class="btn btn-outline" onclick="toggleSilentMode()"
+            style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+            <i class="fa-solid fa-eye-slash"></i> Silent
+          </button>
+
+          <!-- Emergency Lockdown -->
+          <button id="lockdownBtn" class="btn btn-outline" onclick="toggleLockdown()"
+            style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--danger-color); border-color: var(--danger-color);">
+            <i class="fa-solid fa-lock"></i> Lockdown
+          </button>
+
+          <div style="height: 24px; width: 1px; background: var(--border-color);"></div>
+
           <!-- Attack Controls -->
           <div
             style="display: flex; align-items: center; gap: 0.5rem; background: var(--surface-color); padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color);">
@@ -98,8 +116,8 @@
         </div>
       </header>
 
-      <!-- KPI Grid -->
-      <div class="stats-grid">
+      <!-- KPI Grid (Extended) -->
+      <div class="stats-grid" style="grid-template-columns: repeat(5, 1fr);">
         <!-- Risk Score -->
         <div class="stat-card" id="riskCard">
           <span class="label-sm">Risk Score</span>
@@ -125,6 +143,13 @@
           </div>
         </div>
 
+        <!-- Drift Status -->
+        <div class="stat-card">
+          <span class="label-sm">Behavioral Drift</span>
+          <div class="value-lg" id="driftStatus" style="font-size: 1.5rem;">STABLE</div>
+          <div id="driftBadge" class="badge badge-green" style="margin-top: 0.5rem;">Normal</div>
+        </div>
+
         <!-- Status -->
         <div class="stat-card">
           <span class="label-sm">Action Status</span>
@@ -135,6 +160,16 @@
             <span style="font-size: 0.8rem; color: var(--text-muted);">Live Feed</span>
           </div>
         </div>
+      </div>
+
+      <!-- Notification Banner (Gamified Security Awareness) -->
+      <div id="notificationBanner"
+        style="display: none; padding: 0.75rem 1rem; border-radius: 6px; background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-color); align-items: center; gap: 0.75rem;">
+        <i id="notifIcon" class="fa-solid fa-circle-info" style="font-size: 1.2rem; color: var(--accent-color);"></i>
+        <div style="flex: 1;">
+          <span id="notifMessage" style="font-size: 0.9rem; color: var(--text-main);">Notification</span>
+        </div>
+        <button onclick="document.getElementById('notificationBanner').style.display='none'" class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">Dismiss</button>
       </div>
 
       <!-- Alerts Area -->
@@ -178,6 +213,97 @@
         </div>
       </div>
 
+      <!-- Multi-Model Fusion Row -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem;">
+        <!-- Fusion Scores -->
+        <div class="chart-panel">
+          <div class="chart-header">
+            <span class="label-sm">Multi-Model Fusion</span>
+            <span class="badge" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">Hybrid AI</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem; justify-content: center; height: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: var(--text-muted); font-size: 0.85rem;">Isolation Forest</span>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 80px; height: 6px; background: var(--bg-color); border-radius: 3px; overflow: hidden;">
+                  <div id="fusionBarIF" style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.3s;"></div>
+                </div>
+                <span class="mono" id="fusionIF" style="font-size: 0.8rem; width: 40px; text-align: right;">0%</span>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: var(--text-muted); font-size: 0.85rem;">One-Class SVM</span>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 80px; height: 6px; background: var(--bg-color); border-radius: 3px; overflow: hidden;">
+                  <div id="fusionBarSVM" style="width: 0%; height: 100%; background: var(--warning-color); transition: width 0.3s;"></div>
+                </div>
+                <span class="mono" id="fusionSVM" style="font-size: 0.8rem; width: 40px; text-align: right;">0%</span>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: var(--text-muted); font-size: 0.85rem;">Autoencoder</span>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 80px; height: 6px; background: var(--bg-color); border-radius: 3px; overflow: hidden;">
+                  <div id="fusionBarAE" style="width: 0%; height: 100%; background: var(--danger-color); transition: width 0.3s;"></div>
+                </div>
+                <span class="mono" id="fusionAE" style="font-size: 0.8rem; width: 40px; text-align: right;">0%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Context Awareness -->
+        <div class="chart-panel">
+          <div class="chart-header">
+            <span class="label-sm">Context Awareness</span>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success-color);">Active</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem; justify-content: center; height: 100%;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+              <span style="color: var(--text-muted);">Known Devices</span>
+              <span class="mono" id="ctxDevices" style="color: var(--text-main);">-</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+              <span style="color: var(--text-muted);">Known IPs</span>
+              <span class="mono" id="ctxIPs" style="color: var(--text-main);">-</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+              <span style="color: var(--text-muted);">Context Flags</span>
+              <span class="mono" id="ctxFlags" style="color: var(--text-main);">None</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-muted);">Total Logins</span>
+              <span class="mono" id="ctxLogins" style="color: var(--text-main);">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Performance Stats -->
+        <div class="chart-panel">
+          <div class="chart-header">
+            <span class="label-sm">Performance Optimizer</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.75rem; justify-content: center; height: 100%;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+              <span style="color: var(--text-muted);">Polling Interval</span>
+              <span class="mono" id="perfInterval" style="color: var(--text-main);">1.0s</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+              <span style="color: var(--text-muted);">Cycles Saved</span>
+              <span class="mono" id="perfSaved" style="color: var(--success-color);">0</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+              <span style="color: var(--text-muted);">Efficiency</span>
+              <span class="mono" id="perfEfficiency" style="color: var(--text-main);">0%</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-muted);">System Idle</span>
+              <span class="mono" id="perfIdle" style="color: var(--text-main);">No</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Bottom Row -->
       <div class="bottom-grid">
         <!-- Explainability -->
@@ -186,12 +312,9 @@
             <span class="label-sm">Anomaly Attribution (Feature Importance)</span>
           </div>
           <div style="flex: 1; display: flex; gap: 1rem; min-height: 0;">
-            <!-- Feature Labels & Info Column -->
             <div id="featureLegend"
               style="display: flex; flex-direction: column; justify-content: space-around; padding-bottom: 30px; padding-top: 10px;">
-              <!-- Dynamically populated -->
             </div>
-            <!-- Chart Canvas -->
             <div style="flex: 1; position: relative;">
               <canvas id="explainChart"></canvas>
             </div>
@@ -203,7 +326,7 @@
           <div class="chart-header">
             <span class="label-sm">Session Metrics</span>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 1rem; justify-content: center; height: 100%;">
+          <div style="display: flex; flex-direction: column; gap: 0.75rem; justify-content: center; height: 100%;">
             <div
               style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
               <span style="color: var(--text-muted);">FAR (False Accept)</span>
@@ -214,7 +337,12 @@
               <span style="color: var(--text-muted);">FRR (False Reject)</span>
               <span class="mono" style="color: var(--text-main);" id="metricFRR">0.0000</span>
             </div>
-            <div style="margin-top: 1rem;">
+            <div
+              style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+              <span style="color: var(--text-muted);">Drift Score</span>
+              <span class="mono" style="color: var(--text-main);" id="metricDrift">0.0000</span>
+            </div>
+            <div style="margin-top: 0.5rem;">
               <a href="/api/export_report" class="btn btn-outline" style="width: 100%;">
                 <i class="fa-solid fa-download"></i> Download Report
               </a>
@@ -226,21 +354,7 @@
     </main>
   </div>
 
-  <!-- Re-use existing Dashboard Logic -->
   <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-
-  <!-- Inline script to handle alerts logic for new UI IDs -->
-  <script>
-    // Overwriting specific UI update logic from dashboard.js if needed, 
-    // but better to let dashboard.js drive it.
-    // We ensured dashboard.js uses IDs: riskScore, confidenceScore, fingerprintScore, actionStatus,
-    // riskLevelBadge, otpAlert, blockAlert.
-    // NOTE: The new HTML uses 'alertArea' for both step-up and block to be cleaner.
-    // We will need to update dashboard.js to match these IDs or map them here.
-
-    // Let's quickly patch updateRisk in dashboard.js to standard IDs?
-    // OR we just map the logic here in a valid override.
-  </script>
 
   <!-- Modal for Feature Details -->
   <div id="featureModal" class="modal-overlay" onclick="closeModal()">
