@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Behavioral Verification | CDT-MFA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+</head>
+
+<body>
+
+  <div class="dashboard-grid">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>CDT-MFA <span style="font-weight:400; color:var(--text-muted); font-size:0.8em;">SOC</span></span>
+      </div>
+
+      <nav>
+        <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 1rem;">Monitoring</span>
+        <a href="/dashboard" class="nav-link">
+          <i class="fa-solid fa-chart-line"></i> Dashboard
+        </a>
+        <a href="/soc" class="nav-link">
+          <i class="fa-solid fa-network-wired"></i> Live Analysts
+        </a>
+
+        <span class="label-sm" style="padding-left: 1rem; margin-bottom: 0.5rem; margin-top: 2rem;">Configuration</span>
+        <a href="/enroll" class="nav-link">
+          <i class="fa-solid fa-fingerprint"></i> Enrollment
+        </a>
+        <div class="nav-link" style="position: relative; cursor: pointer; margin-bottom: 0.25rem;">
+          <i class="fa-solid fa-sliders"></i> Settings
+          <input type="color" id="colorPicker"
+            style="opacity: 0; position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: pointer;" />
+        </div>
+      </nav>
+
+      <div style="margin-top: auto;">
+        <div class="panel" style="padding: 1rem; margin-bottom: 1rem;">
+          <div class="label-sm">Active User</div>
+          <div style="font-weight: 600;">{{ user }}</div>
+        </div>
+        <a href="/logout" class="btn btn-outline" style="width: 100%; border-color: var(--border-color);">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" style="align-items: center; justify-content: center;">
+
+      <div class="panel" style="width: 100%; max-width: 650px; padding: 2.5rem;">
+
+        <div style="text-align: center; margin-bottom: 2rem;">
+          <div style="width: 64px; height: 64px; background: rgba(59, 130, 246, 0.1); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: var(--accent-color);">
+            <i class="fa-solid fa-keyboard" style="font-size: 2rem;"></i>
+          </div>
+          <h2 style="margin-bottom: 0.5rem;">Behavioral Verification</h2>
+          <p style="color: var(--text-muted);">Prove your identity through your unique behavioral patterns.</p>
+        </div>
+
+        <!-- Challenge Area -->
+        <div id="challengeArea" style="display: none;">
+          <div style="text-align: center; margin-bottom: 1.5rem; padding: 1rem; background: rgba(59, 130, 246, 0.05); border: 1px solid var(--border-color); border-radius: 8px;">
+            <div class="label-sm">Type the following phrase exactly:</div>
+            <div id="challengePhrase" style="font-size: 1.3rem; font-weight: 600; margin-top: 0.5rem; font-family: var(--font-mono); color: var(--text-main);"></div>
+          </div>
+
+          <div style="margin-bottom: 1.5rem;">
+            <input type="text" id="typingInput" placeholder="Start typing here..."
+              style="width: 100%; padding: 1rem; font-size: 1.1rem; text-align: center; font-family: var(--font-mono);"
+              autocomplete="off" spellcheck="false" />
+          </div>
+
+          <div id="feedbackArea" style="display: none; text-align: center; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+          </div>
+
+          <div style="display: flex; gap: 1rem;">
+            <button class="btn btn-outline" style="flex: 1;" onclick="generateChallenge()">
+              <i class="fa-solid fa-rotate-right"></i> New Challenge
+            </button>
+            <button class="btn btn-primary" style="flex: 2;" onclick="submitTypingChallenge()">
+              <i class="fa-solid fa-check"></i> Verify
+            </button>
+          </div>
+        </div>
+
+        <!-- Start Button -->
+        <div id="startArea" style="text-align: center;">
+          <button class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1rem;" onclick="generateChallenge()">
+            <i class="fa-solid fa-play"></i> Start Behavioral CAPTCHA
+          </button>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let keystrokeTimings = [];
+
+    const typingInput = document.getElementById('typingInput');
+    if (typingInput) {
+      typingInput.addEventListener('keydown', function(e) {
+        keystrokeTimings.push(Date.now() / 1000.0);
+      });
+    }
+
+    async function generateChallenge() {
+      keystrokeTimings = [];
+      typingInput.value = '';
+
+      const res = await fetch('/api/captcha/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'typing' })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById('challengePhrase').innerText = data.phrase;
+        document.getElementById('challengeArea').style.display = 'block';
+        document.getElementById('startArea').style.display = 'none';
+        document.getElementById('feedbackArea').style.display = 'none';
+        typingInput.focus();
+      }
+    }
+
+    async function submitTypingChallenge() {
+      const typedText = typingInput.value;
+
+      const res = await fetch('/api/captcha/verify_typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          typed_text: typedText,
+          keystroke_timings: keystrokeTimings
+        })
+      });
+
+      const data = await res.json();
+      const feedback = document.getElementById('feedbackArea');
+      feedback.style.display = 'block';
+
+      if (data.passed) {
+        feedback.style.background = 'rgba(16, 185, 129, 0.1)';
+        feedback.style.border = '1px solid var(--success-color)';
+        feedback.innerHTML = `
+          <i class="fa-solid fa-circle-check" style="color: var(--success-color); font-size: 1.5rem;"></i>
+          <div style="margin-top: 0.5rem; font-weight: 600; color: var(--success-color);">Verification Passed</div>
+          <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
+            Typing rhythm: ${data.metrics.mean_interval_ms}ms avg, ${data.metrics.std_interval_ms}ms variance
+          </div>
+        `;
+        setTimeout(() => { window.location.href = '/dashboard'; }, 2000);
+      } else {
+        feedback.style.background = 'rgba(239, 68, 68, 0.1)';
+        feedback.style.border = '1px solid var(--danger-color)';
+        feedback.innerHTML = `
+          <i class="fa-solid fa-circle-xmark" style="color: var(--danger-color); font-size: 1.5rem;"></i>
+          <div style="margin-top: 0.5rem; font-weight: 600; color: var(--danger-color);">Verification Failed</div>
+          <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
+            Reason: ${data.reason}. Please try again.
+          </div>
+        `;
+      }
+    }
+  </script>
+
+</body>
+
+</html>
